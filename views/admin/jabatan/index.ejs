@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/css/tailwind.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-dark-900 min-h-screen" style="background:#1a1d20;">
+    <%
+        const q = (filters && filters.q) ? filters.q : '';
+        const pageInfo = pagination || { page: 1, totalPages: 1, hasPrev: false, hasNext: false, prevPage: 1, nextPage: 1, startItem: 0, endItem: 0, totalItems: 0 };
+        const queryQ = q ? `&q=${encodeURIComponent(q)}` : '';
+    %>
+    <%- include('../../partials/navbar') %>
+    <div class="pt-20">
+        <div class="flex flex-col lg:flex-row">
+            <%- include('../../partials/sidebar', { currentPage: 'jabatan' }) %>
+            <div class="flex-1 lg:ml-64 p-4 sm:p-6 lg:p-8">
+                <div class="flex items-center justify-between mb-6">
+                    <div>
+                        <div class="flex items-center space-x-3 mb-2">
+                            <i class="fas fa-briefcase text-brown-400 text-xl"></i>
+                            <h1 class="text-3xl font-bold text-white">Kelola Jabatan</h1>
+                        </div>
+                        <p class="text-brown-300 text-sm">Daftar jabatan karyawan di FLEUR CAFE - Atelier d'artistes</p>
+                    </div>
+                    <button type="button" id="btnOpenAdd" class="bg-brown-600 hover:bg-brown-500 text-white px-4 py-3 rounded-lg shadow-lg">
+                        <i class="fas fa-plus mr-2"></i>Tambah Jabatan
+                    </button>
+                </div>
+
+                <% if (success && success.length) { %>
+                    <% (Array.isArray(success) ? success : [success]).forEach(msg => { %>
+                        <div class="mb-4 rounded-lg border border-green-700 bg-green-900/60 px-4 py-3 text-green-200"><i class="fas fa-check-circle mr-2"></i><%= msg %></div>
+                    <% }) %>
+                <% } %>
+                <% if (error && error.length) { %>
+                    <% (Array.isArray(error) ? error : [error]).forEach(msg => { %>
+                        <div class="mb-4 rounded-lg border border-red-700 bg-red-900/60 px-4 py-3 text-red-200"><i class="fas fa-exclamation-circle mr-2"></i><%= msg %></div>
+                    <% }) %>
+                <% } %>
+
+                <form method="GET" action="/admin/jabatan" class="mb-4 flex flex-col gap-2 sm:flex-row">
+                    <input
+                        type="text"
+                        name="q"
+                        value="<%= q %>"
+                        placeholder="Cari kode/nama jabatan/deskripsi..."
+                        class="w-full rounded-lg border border-brown-700/40 bg-dark-700 px-3 py-2 text-white sm:max-w-sm" />
+                    <button type="submit" class="rounded-lg bg-brown-600 px-4 py-2 text-white hover:bg-brown-500">
+                        <i class="fas fa-search mr-1"></i>Cari
+                    </button>
+                    <% if (q) { %>
+                        <a href="/admin/jabatan" class="rounded-lg border border-brown-700/40 px-4 py-2 text-brown-200 hover:bg-dark-700">Reset</a>
+                    <% } %>
+                </form>
+
+                <div class="overflow-hidden rounded-xl border border-brown-700/40 bg-dark-800">
+                    <table class="min-w-full divide-y divide-brown-700/40">
+                        <thead class="bg-dark-700 text-brown-200">
+                            <tr>
+                                <th class="px-4 py-3 text-left">Kode</th>
+                                <th class="px-4 py-3 text-left">Nama Jabatan</th>
+                                <th class="px-4 py-3 text-left">Deskripsi</th>
+                                <th class="px-4 py-3 text-center">Digunakan</th>
+                                <th class="px-4 py-3 text-center">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-brown-700/30 text-brown-100">
+                            <% if (jabatan.length === 0) { %>
+                                <tr><td colspan="5" class="px-4 py-10 text-center text-brown-300">
+                                    <i class="fas fa-inbox text-4xl mb-3 text-brown-400 block"></i>
+                                    Belum ada jabatan. Klik <span class="text-brown-200 font-semibold">Tambah Jabatan</span> untuk menambah.
+                                </td></tr>
+                            <% } %>
+                            <% jabatan.forEach(j => { %>
+                                <tr class="hover:bg-dark-700/50" data-id="<%= j.id %>" data-nama="<%= j.nama_jabatan %>" data-deskripsi="<%= j.deskripsi || '' %>">
+                                    <td class="px-4 py-3 text-xs text-brown-300"><%= j.kode || '-' %></td>
+                                    <td class="px-4 py-3">
+                                        <div class="font-semibold text-white"><%= j.nama_jabatan %></div>
+                                    </td>
+                                    <td class="px-4 py-3 text-sm text-brown-200"><%= j.deskripsi || '-' %></td>
+                                    <td class="px-4 py-3 text-center">
+                                        <span class="rounded-full bg-brown-900/60 text-brown-200 px-3 py-1 text-xs">
+                                            <%= j.karyawan_count %> karyawan
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-3 text-center">
+                                        <button type="button" class="btn-edit mr-3 text-yellow-400 hover:text-yellow-300" data-id="<%= j.id %>" data-nama="<%= j.nama_jabatan %>" data-deskripsi="<%= j.deskripsi || '' %>">
+                                            <i class="fas fa-edit mr-1"></i>Edit
+                                        </button>
+                                        <button type="button" class="btn-delete text-red-400 hover:text-red-300" data-id="<%= j.id %>" data-nama="<%= j.nama_jabatan %>" data-count="<%= j.karyawan_count %>">
+                                            <i class="fas fa-trash mr-1"></i>Hapus
+                                        </button>
+                                    </td>
+                                </tr>
+                            <% }) %>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="mt-4 flex flex-col gap-2 text-sm text-brown-300 sm:flex-row sm:items-center sm:justify-between">
+                    <div>Menampilkan <%= pageInfo.startItem %>-<%= pageInfo.endItem %> dari <%= pageInfo.totalItems %> data</div>
+                    <div class="flex items-center gap-2">
+                        <a href="/admin/jabatan?page=<%= pageInfo.prevPage %><%= queryQ %>" class="rounded border border-brown-700/40 px-3 py-1 <%= pageInfo.hasPrev ? 'text-brown-200 hover:bg-dark-700' : 'pointer-events-none opacity-40 text-brown-500' %>">Prev</a>
+                        <span class="text-brown-200">Hal <%= pageInfo.page %>/<%= pageInfo.totalPages %></span>
+                        <a href="/admin/jabatan?page=<%= pageInfo.nextPage %><%= queryQ %>" class="rounded border border-brown-700/40 px-3 py-1 <%= pageInfo.hasNext ? 'text-brown-200 hover:bg-dark-700' : 'pointer-events-none opacity-40 text-brown-500' %>">Next</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Add/Edit Jabatan -->
+    <div id="jabatanModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+        <div class="w-full max-w-md rounded-2xl border border-brown-600/40 bg-dark-800 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-brown-600/30 px-5 py-4">
+                <h3 id="modalTitle" class="text-lg font-bold text-white">
+                    <i class="fas fa-briefcase mr-2 text-brown-300"></i>Tambah Jabatan
+                </h3>
+                <button type="button" id="btnCloseModal" class="text-brown-400 hover:text-white p-1 rounded">
+                    <i class="fas fa-times text-lg"></i>
+                </button>
+            </div>
+            <form id="jabatanForm" class="p-5 space-y-4">
+                <input type="hidden" id="jabatanId" name="id" value="">
+                <div>
+                    <label for="nama_jabatan" class="block text-sm font-medium text-brown-300 mb-1">Nama Jabatan *</label>
+                    <input type="text" id="nama_jabatan" name="nama_jabatan" required
+                           class="w-full rounded-lg border border-brown-700/40 bg-dark-700 px-3 py-2 text-white placeholder-brown-400 focus:ring-2 focus:ring-brown-500 focus:border-brown-400"
+                           placeholder="Contoh: Supervisor, Barista, Kasir">
+                </div>
+                <div>
+                    <label for="deskripsi" class="block text-sm font-medium text-brown-300 mb-1">Deskripsi</label>
+                    <textarea id="deskripsi" name="deskripsi" rows="3"
+                              class="w-full rounded-lg border border-brown-700/40 bg-dark-700 px-3 py-2 text-white placeholder-brown-400 focus:ring-2 focus:ring-brown-500 focus:border-brown-400"
+                              placeholder="Tugas dan tanggung jawab jabatan (opsional)"></textarea>
+                </div>
+                <div id="modalError" class="hidden rounded-lg border border-red-700 bg-red-900/60 px-3 py-2 text-sm text-red-200"></div>
+                <div class="flex justify-end gap-2 pt-2 border-t border-brown-600/30">
+                    <button type="button" id="btnCancel" class="rounded-lg border border-brown-700/40 px-4 py-2 text-brown-200 hover:bg-dark-700">
+                        Batal
+                    </button>
+                    <button type="submit" id="btnSubmit" class="rounded-lg bg-brown-600 hover:bg-brown-500 text-white px-4 py-2 shadow-lg">
+                        <i class="fas fa-save mr-1"></i>Simpan
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <%- include('../../partials/notify') %>
+    <script>
+        (function () {
+            const modal = document.getElementById('jabatanModal');
+            const modalTitle = document.getElementById('modalTitle');
+            const form = document.getElementById('jabatanForm');
+            const inputId = document.getElementById('jabatanId');
+            const inputNama = document.getElementById('nama_jabatan');
+            const inputDesk = document.getElementById('deskripsi');
+            const modalError = document.getElementById('modalError');
+
+            function openModal(mode, data) {
+                modalError.classList.add('hidden');
+                modalError.textContent = '';
+                if (mode === 'edit') {
+                    modalTitle.innerHTML = '<i class="fas fa-edit mr-2 text-brown-300"></i>Edit Jabatan';
+                    inputId.value = data.id;
+                    inputNama.value = data.nama;
+                    inputDesk.value = data.deskripsi;
+                } else {
+                    modalTitle.innerHTML = '<i class="fas fa-briefcase mr-2 text-brown-300"></i>Tambah Jabatan';
+                    inputId.value = '';
+                    inputNama.value = '';
+                    inputDesk.value = '';
+                }
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                setTimeout(() => inputNama.focus(), 50);
+            }
+            function closeModal() {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }
+
+            document.getElementById('btnOpenAdd').addEventListener('click', () => openModal('add'));
+            document.getElementById('btnCloseModal').addEventListener('click', closeModal);
+            document.getElementById('btnCancel').addEventListener('click', closeModal);
+            modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+
+            document.querySelectorAll('.btn-edit').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    openModal('edit', {
+                        id: btn.dataset.id,
+                        nama: btn.dataset.nama,
+                        deskripsi: btn.dataset.deskripsi
+                    });
+                });
+            });
+
+            document.querySelectorAll('.btn-delete').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const id = btn.dataset.id;
+                    const nama = btn.dataset.nama;
+                    const count = parseInt(btn.dataset.count, 10) || 0;
+                    if (count > 0) {
+                        Notify.warning(`Jabatan "${nama}" masih digunakan oleh ${count} karyawan. Hapus tidak diizinkan.`);
+                        return;
+                    }
+                    const ok = await Notify.confirm({
+                        title: `Hapus jabatan "${nama}"?`,
+                        message: 'Tindakan ini tidak bisa dibatalkan.',
+                        okText: 'Ya, Hapus',
+                        cancelText: 'Batal',
+                        variant: 'danger',
+                        icon: 'danger'
+                    });
+                    if (!ok) return;
+                    try {
+                        const res = await fetch('/admin/jabatan/delete', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ id })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            Notify.success('Jabatan berhasil dihapus');
+                            setTimeout(() => window.location.reload(), 600);
+                        } else {
+                            Notify.error(data.message || 'Gagal menghapus jabatan');
+                        }
+                    } catch (err) {
+                        console.error(err);
+                        Notify.error('Terjadi kesalahan jaringan');
+                    }
+                });
+            });
+
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                modalError.classList.add('hidden');
+                const id = inputId.value.trim();
+                const nama = inputNama.value.trim();
+                const deskripsi = inputDesk.value.trim();
+                if (!nama) {
+                    modalError.textContent = 'Nama jabatan wajib diisi';
+                    modalError.classList.remove('hidden');
+                    return;
+                }
+                const url = id ? '/admin/jabatan/update' : '/admin/jabatan/add';
+                const body = id ? { id, nama_jabatan: nama, deskripsi } : { nama_jabatan: nama, deskripsi };
+                try {
+                    const res = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body)
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        Notify.success(id ? 'Jabatan berhasil diupdate' : 'Jabatan berhasil ditambahkan');
+                        setTimeout(() => window.location.reload(), 600);
+                    } else {
+                        modalError.textContent = data.message || 'Gagal menyimpan jabatan';
+                        modalError.classList.remove('hidden');
+                    }
+                } catch (err) {
+                    console.error(err);
+                    modalError.textContent = 'Terjadi kesalahan jaringan';
+                    modalError.classList.remove('hidden');
+                }
+            });
+        })();
+    </script>
+</body>
+</html>

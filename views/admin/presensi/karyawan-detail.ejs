@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/css/tailwind.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-dark-900 min-h-screen" style="background:#1a1d20;">
+    <%
+        const uploadUrl = (value) => {
+            if (!value) return '/LogoApp.jpeg';
+            const normalized = String(value).replace(/\\/g, '/').replace(/^public\//, '');
+            if (/^https?:\/\//i.test(normalized)) return normalized;
+            return '/' + normalized;
+        };
+        const formatDateID = (value) => {
+            if (!value) return '-';
+            const d = new Date(value);
+            if (Number.isNaN(d.getTime())) return String(value);
+            return d.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        };
+        const filterType = (filters && filters.filterType) || 'month';
+        const today = new Date();
+        const defaultMonth = (today.getMonth() + 1);
+        const defaultYear = today.getFullYear();
+        const pageInfo = pagination || { page: 1, totalPages: 1, hasPrev: false, hasNext: false, prevPage: 1, nextPage: 1, startItem: 0, endItem: 0, totalItems: 0 };
+        const queryStringNoPage = (() => {
+            const sp = new URLSearchParams();
+            if (filters && filters.filterType) sp.set('filterType', filters.filterType);
+            if (filters && filters.tanggal) sp.set('tanggal', filters.tanggal);
+            if (filters && filters.startDate) sp.set('startDate', filters.startDate);
+            if (filters && filters.endDate) sp.set('endDate', filters.endDate);
+            if (filters && filters.month) sp.set('month', filters.month);
+            if (filters && filters.year) sp.set('year', filters.year);
+            const s = sp.toString();
+            return s ? '&' + s : '';
+        })();
+    %>
+    <%- include('../../partials/navbar') %>
+    <div class="pt-20">
+        <div class="flex flex-col lg:flex-row">
+            <%- include('../../partials/sidebar', { currentPage: 'presensi', admin: admin }) %>
+            <div class="flex-1 lg:ml-64 p-4 sm:p-6 lg:p-8">
+
+                <!-- Breadcrumb -->
+                <div class="mb-4 text-sm text-brown-300">
+                    <a href="/admin/presensi" class="hover:text-white"><i class="fas fa-arrow-left mr-1"></i>Daftar Presensi</a>
+                    <span class="mx-2">/</span>
+                    <span class="text-white">Detail Karyawan</span>
+                </div>
+
+                <!-- Employee Header Card -->
+                <div class="mb-6 rounded-xl border border-brown-700/40 bg-dark-800 p-6">
+                    <div class="flex items-start gap-5">
+                        <img src="<%= uploadUrl(employee.profile_picture) %>"
+                             alt="<%= employee.nama %>"
+                             onerror="this.src='/LogoApp.jpeg'; this.onerror=null;"
+                             class="w-20 h-20 rounded-full object-cover border-2 border-brown-600/50">
+                        <div class="flex-1">
+                            <h1 class="text-2xl font-bold text-white"><%= employee.nama %></h1>
+                            <div class="text-sm text-brown-300 mt-1">
+                                <span>NIK: <%= employee.nik %></span>
+                                <% if (employee.email) { %><span class="ml-3">• <%= employee.email %></span><% } %>
+                            </div>
+                            <div class="text-sm text-brown-200 mt-2">
+                                <i class="fas fa-briefcase mr-1 text-brown-400"></i><%= employee.nama_jabatan || '-' %>
+                                <% if (employee.jadwal_kerja) { %>
+                                    <span class="ml-3"><i class="fas fa-clock mr-1 text-brown-400"></i><%= employee.jadwal_kerja %></span>
+                                <% } %>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Statistics Cards -->
+                <div class="mb-6 grid grid-cols-1 sm:grid-cols-4 gap-4">
+                    <div class="rounded-xl border border-brown-700/40 bg-dark-800 p-4 text-center">
+                        <div class="text-2xl font-bold text-blue-300"><%= summary.total_presensi || 0 %></div>
+                        <div class="text-xs text-brown-300 mt-1">Total Presensi</div>
+                    </div>
+                    <div class="rounded-xl border border-brown-700/40 bg-dark-800 p-4 text-center">
+                        <div class="text-2xl font-bold text-green-300"><%= summary.total_hadir || 0 %></div>
+                        <div class="text-xs text-brown-300 mt-1">Hadir Tepat Waktu</div>
+                    </div>
+                    <div class="rounded-xl border border-brown-700/40 bg-dark-800 p-4 text-center">
+                        <div class="text-2xl font-bold text-yellow-300"><%= summary.total_terlambat || 0 %></div>
+                        <div class="text-xs text-brown-300 mt-1">Terlambat</div>
+                    </div>
+                    <div class="rounded-xl border border-brown-700/40 bg-dark-800 p-4 text-center">
+                        <div class="text-2xl font-bold text-red-300"><%= summary.total_tidak_hadir || 0 %></div>
+                        <div class="text-xs text-brown-300 mt-1">Tidak Hadir</div>
+                    </div>
+                </div>
+
+                <!-- Filter -->
+                <div class="mb-4 rounded-xl border border-brown-700/40 bg-dark-800 p-4">
+                    <form method="GET" action="/admin/presensi/karyawan/<%= employee.id %>" class="space-y-3">
+                        <div class="grid grid-cols-1 gap-3 sm:grid-cols-4">
+                            <div>
+                                <label class="block text-xs text-brown-300 mb-1">Tipe Filter</label>
+                                <select name="filterType" onchange="toggleFilterFields(this.value)" id="filterType"
+                                    class="w-full rounded-lg border border-brown-700/40 bg-dark-700 px-3 py-2 text-white">
+                                    <option value="date" <%= filterType === 'date' ? 'selected' : '' %>>Tanggal</option>
+                                    <option value="range" <%= filterType === 'range' ? 'selected' : '' %>>Rentang</option>
+                                    <option value="month" <%= filterType === 'month' ? 'selected' : '' %>>Bulan</option>
+                                    <option value="year" <%= filterType === 'year' ? 'selected' : '' %>>Tahun</option>
+                                </select>
+                            </div>
+                            <div id="field-date" class="<%= filterType === 'date' ? '' : 'hidden' %>">
+                                <label class="block text-xs text-brown-300 mb-1">Tanggal</label>
+                                <input type="date" name="tanggal" value="<%= (filters && filters.tanggal) || '' %>"
+                                    class="w-full rounded-lg border border-brown-700/40 bg-dark-700 px-3 py-2 text-white">
+                            </div>
+                            <div id="field-range" class="<%= filterType === 'range' ? 'grid grid-cols-2 gap-2 sm:col-span-2' : 'hidden' %>">
+                                <div>
+                                    <label class="block text-xs text-brown-300 mb-1">Mulai</label>
+                                    <input type="date" name="startDate" value="<%= (filters && filters.startDate) || '' %>"
+                                        class="w-full rounded-lg border border-brown-700/40 bg-dark-700 px-3 py-2 text-white">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-brown-300 mb-1">Akhir</label>
+                                    <input type="date" name="endDate" value="<%= (filters && filters.endDate) || '' %>"
+                                        class="w-full rounded-lg border border-brown-700/40 bg-dark-700 px-3 py-2 text-white">
+                                </div>
+                            </div>
+                            <div id="field-month" class="<%= filterType === 'month' ? 'grid grid-cols-2 gap-2' : 'hidden' %>">
+                                <div>
+                                    <label class="block text-xs text-brown-300 mb-1">Bulan</label>
+                                    <select name="month" class="w-full rounded-lg border border-brown-700/40 bg-dark-700 px-3 py-2 text-white">
+                                        <% const months = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember']; %>
+                                        <% months.forEach((m, i) => { %>
+                                            <option value="<%= i + 1 %>" <%= ((filters && filters.month) || defaultMonth) == (i + 1) ? 'selected' : '' %>><%= m %></option>
+                                        <% }) %>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-brown-300 mb-1">Tahun</label>
+                                    <input type="number" name="year" value="<%= (filters && filters.year) || defaultYear %>" min="2020" max="2100"
+                                        class="w-full rounded-lg border border-brown-700/40 bg-dark-700 px-3 py-2 text-white">
+                                </div>
+                            </div>
+                            <div id="field-year" class="<%= filterType === 'year' ? '' : 'hidden' %>">
+                                <label class="block text-xs text-brown-300 mb-1">Tahun</label>
+                                <input type="number" name="year" value="<%= (filters && filters.year) || defaultYear %>" min="2020" max="2100"
+                                    class="w-full rounded-lg border border-brown-700/40 bg-dark-700 px-3 py-2 text-white">
+                            </div>
+                        </div>
+                        <div class="flex justify-end gap-2">
+                            <a href="/admin/presensi/karyawan/<%= employee.id %>" class="rounded-lg border border-brown-700/40 px-4 py-2 text-brown-200 hover:bg-dark-700 text-sm">Reset</a>
+                            <button type="submit" class="rounded-lg bg-brown-600 px-4 py-2 text-white hover:bg-brown-500 text-sm">
+                                <i class="fas fa-filter mr-1"></i>Terapkan
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Tabel Riwayat Presensi -->
+                <div class="overflow-hidden rounded-xl border border-brown-700/40 bg-dark-800">
+                    <div class="flex flex-col gap-2 border-b border-brown-700/40 bg-dark-700 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <div class="font-semibold text-white">Riwayat Presensi</div>
+                            <div class="text-xs text-brown-300">Periode: <%= periodLabel %></div>
+                        </div>
+                        <div class="text-xs text-brown-300"><%= pageInfo.totalItems %> catatan total</div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-brown-700/40">
+                            <thead class="bg-dark-700/60 text-brown-200">
+                                <tr>
+                                    <th class="px-4 py-3 text-left">Tanggal</th>
+                                    <th class="px-4 py-3 text-left">Jam Masuk</th>
+                                    <th class="px-4 py-3 text-left">Jam Keluar</th>
+                                    <th class="px-4 py-3 text-left">Status</th>
+                                    <th class="px-4 py-3 text-center">Jarak</th>
+                                    <th class="px-4 py-3 text-center">Lokasi</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-brown-700/30 text-brown-100">
+                                <% if (records.length === 0) { %>
+                                    <tr><td colspan="6" class="px-4 py-10 text-center text-brown-300">
+                                        <i class="fas fa-inbox text-3xl block mb-3 text-brown-400"></i>
+                                        Tidak ada riwayat presensi untuk periode ini.
+                                    </td></tr>
+                                <% } %>
+                                <% records.forEach(r => { %>
+                                    <tr class="hover:bg-dark-700/40">
+                                        <td class="px-4 py-3">
+                                            <div class="font-medium text-white"><%= formatDateID(r.tanggal) %></div>
+                                        </td>
+                                        <td class="px-4 py-3 text-sm text-brown-200"><%= r.jam_masuk || '-' %></td>
+                                        <td class="px-4 py-3 text-sm text-brown-200"><%= r.jam_keluar || '-' %></td>
+                                        <td class="px-4 py-3">
+                                            <% const st = String(r.status || '').toLowerCase(); %>
+                                            <% if (['hadir','present'].includes(st)) { %>
+                                                <span class="rounded-full px-3 py-1 text-xs bg-green-900/60 text-green-200"><i class="fas fa-check-circle mr-1"></i>Hadir</span>
+                                            <% } else if (st === 'late') { %>
+                                                <span class="rounded-full px-3 py-1 text-xs bg-yellow-900/60 text-yellow-200"><i class="fas fa-clock mr-1"></i>Terlambat</span>
+                                            <% } else { %>
+                                                <span class="rounded-full px-3 py-1 text-xs bg-red-900/60 text-red-200"><i class="fas fa-times-circle mr-1"></i><%= r.status %></span>
+                                            <% } %>
+                                        </td>
+                                        <td class="px-4 py-3 text-center text-sm text-brown-200">
+                                            <%= r.distance_in || 0 %> m
+                                        </td>
+                                        <td class="px-4 py-3 text-center">
+                                            <% if ((r.lat_masuk && r.long_masuk) || (r.lat_keluar && r.long_keluar)) { %>
+                                                <button type="button"
+                                                        class="btn-show-map text-blue-400 hover:text-blue-300 text-sm"
+                                                        data-tanggal="<%= formatDateID(r.tanggal) %>"
+                                                        data-lat-in="<%= r.lat_masuk || '' %>"
+                                                        data-lng-in="<%= r.long_masuk || '' %>"
+                                                        data-jam-in="<%= r.jam_masuk || '-' %>"
+                                                        data-jarak-in="<%= r.distance_in || 0 %>"
+                                                        data-lat-out="<%= r.lat_keluar || '' %>"
+                                                        data-lng-out="<%= r.long_keluar || '' %>"
+                                                        data-jam-out="<%= r.jam_keluar || '-' %>"
+                                                        data-jarak-out="<%= r.distance_out || 0 %>">
+                                                    <i class="fas fa-map-marker-alt mr-1"></i>Maps
+                                                </button>
+                                            <% } else { %>
+                                                <span class="text-brown-400 text-sm">-</span>
+                                            <% } %>
+                                        </td>
+                                    </tr>
+                                <% }) %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="mt-4 flex flex-col gap-2 text-sm text-brown-300 sm:flex-row sm:items-center sm:justify-between">
+                    <div>Menampilkan <%= pageInfo.startItem %>-<%= pageInfo.endItem %> dari <%= pageInfo.totalItems %> data</div>
+                    <div class="flex items-center gap-2">
+                        <a href="/admin/presensi/karyawan/<%= employee.id %>?page=<%= pageInfo.prevPage %><%= queryStringNoPage %>" class="rounded border border-brown-700/40 px-3 py-1 <%= pageInfo.hasPrev ? 'text-brown-200 hover:bg-dark-700' : 'pointer-events-none opacity-40 text-brown-500' %>">Prev</a>
+                        <span class="text-brown-200">Hal <%= pageInfo.page %>/<%= pageInfo.totalPages %></span>
+                        <a href="/admin/presensi/karyawan/<%= employee.id %>?page=<%= pageInfo.nextPage %><%= queryStringNoPage %>" class="rounded border border-brown-700/40 px-3 py-1 <%= pageInfo.hasNext ? 'text-brown-200 hover:bg-dark-700' : 'pointer-events-none opacity-40 text-brown-500' %>">Next</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Modal Google Maps -->
+    <div id="mapsModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+        <div class="w-full max-w-3xl rounded-2xl border border-brown-600/40 bg-dark-800 shadow-2xl overflow-hidden">
+            <div class="flex items-center justify-between border-b border-brown-600/30 px-5 py-4">
+                <div>
+                    <h3 class="text-lg font-bold text-white">
+                        <i class="fas fa-map-marker-alt mr-2 text-brown-300"></i>Lokasi Presensi
+                    </h3>
+                    <div id="mapsModalDate" class="text-xs text-brown-300 mt-1"></div>
+                </div>
+                <button type="button" id="btnCloseMapsModal" class="text-brown-400 hover:text-white p-1 rounded">
+                    <i class="fas fa-times text-lg"></i>
+                </button>
+            </div>
+
+            <!-- Tab Navigation: Clock In / Clock Out -->
+            <div class="flex border-b border-brown-600/30 bg-dark-700/40">
+                <button type="button" id="tabClockIn" data-tab="in"
+                        class="tab-clock flex-1 px-5 py-3 text-sm font-medium border-b-2 border-brown-500 text-white bg-brown-600/20">
+                    <i class="fas fa-sign-in-alt mr-2 text-green-400"></i>Clock In
+                    <span id="tabClockInTime" class="ml-2 text-xs text-brown-300"></span>
+                </button>
+                <button type="button" id="tabClockOut" data-tab="out"
+                        class="tab-clock flex-1 px-5 py-3 text-sm font-medium border-b-2 border-transparent text-brown-300 hover:text-white hover:bg-brown-700/20">
+                    <i class="fas fa-sign-out-alt mr-2 text-orange-400"></i>Clock Out
+                    <span id="tabClockOutTime" class="ml-2 text-xs text-brown-300"></span>
+                </button>
+            </div>
+
+            <!-- Legend: Karyawan vs Kantor -->
+            <div class="flex items-center gap-4 px-5 py-2 bg-dark-700/30 border-b border-brown-600/30 text-xs text-brown-200">
+                <span class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-red-500 inline-block shadow"></span>Lokasi Karyawan</span>
+                <span class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-blue-500 inline-block shadow"></span>Lokasi Kantor</span>
+                <span class="flex items-center gap-2"><span class="w-3 h-3 rounded-full border-2 border-blue-400 inline-block"></span>Radius <%= (officeSetting && officeSetting.radius_meter) || 100 %> m</span>
+            </div>
+
+            <div class="p-0 relative" style="height: 420px;">
+                <div id="mapsContainer" class="w-full h-full bg-dark-700"></div>
+                <div id="mapsEmpty" class="hidden absolute inset-0 items-center justify-center text-brown-300 bg-dark-800 z-10">
+                    <div class="text-center px-6">
+                        <i class="fas fa-map-marker-alt text-5xl mb-4 text-brown-700 block opacity-50"></i>
+                        <div id="mapsEmptyMessage" class="text-base font-medium text-brown-200">Lokasi tidak tersedia</div>
+                        <div class="text-xs text-brown-400 mt-2">Data koordinat GPS tidak tersimpan untuk waktu ini</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Info Card: Karyawan vs Kantor -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 border-t border-brown-600/30 px-5 py-3 bg-dark-700/20">
+                <div class="rounded-lg border border-red-700/30 bg-red-900/10 p-3">
+                    <div class="text-xs uppercase text-red-300 font-semibold flex items-center gap-1">
+                        <span class="w-2 h-2 rounded-full bg-red-500 inline-block"></span>Lokasi Karyawan
+                    </div>
+                    <div id="mapsKaryawanCoords" class="text-xs text-brown-200 font-mono mt-1">-</div>
+                    <div id="mapsKaryawanJam" class="text-xs text-brown-400 mt-0.5">-</div>
+                </div>
+                <div class="rounded-lg border border-blue-700/30 bg-blue-900/10 p-3">
+                    <div class="text-xs uppercase text-blue-300 font-semibold flex items-center gap-1">
+                        <span class="w-2 h-2 rounded-full bg-blue-500 inline-block"></span>Lokasi Kantor
+                    </div>
+                    <% if (officeSetting && officeSetting.lat_kantor && officeSetting.long_kantor) { %>
+                        <div class="text-xs text-brown-200 font-mono mt-1">
+                            Lat: <%= officeSetting.lat_kantor %>  |  Lng: <%= officeSetting.long_kantor %>
+                        </div>
+                        <div class="text-xs text-brown-400 mt-0.5">Radius: <%= officeSetting.radius_meter || 100 %> m</div>
+                    <% } else { %>
+                        <div class="text-xs text-brown-400 mt-1 italic">Lokasi kantor belum di-set</div>
+                    <% } %>
+                </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-2 justify-between items-start sm:items-center border-t border-brown-600/30 px-5 py-3 text-sm text-brown-300">
+                <div id="mapsDistanceStatus" class="text-xs">-</div>
+                <div class="flex gap-3">
+                    <a id="mapsOpenDirections" href="#" target="_blank" rel="noopener" class="text-blue-400 hover:text-blue-300 text-xs hidden">
+                        <i class="fas fa-route mr-1"></i>Rute Kantor → Karyawan
+                    </a>
+                    <a id="mapsOpenExternal" href="#" target="_blank" rel="noopener" class="text-blue-400 hover:text-blue-300 text-xs">
+                        <i class="fas fa-external-link-alt mr-1"></i>Buka di Google Maps
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Office setting + Google Maps API key untuk modal map -->
+    <script>
+        window.OFFICE_LAT = <%= (officeSetting && officeSetting.lat_kantor) ? officeSetting.lat_kantor : 'null' %>;
+        window.OFFICE_LNG = <%= (officeSetting && officeSetting.long_kantor) ? officeSetting.long_kantor : 'null' %>;
+        window.OFFICE_RADIUS = <%= (officeSetting && officeSetting.radius_meter) || 100 %>;
+    </script>
+    <script async defer src="https://maps.googleapis.com/maps/api/js?key=<%= typeof GOOGLE_MAPS_API_KEY !== 'undefined' ? GOOGLE_MAPS_API_KEY : '' %>"></script>
+
+    <script>
+        function toggleFilterFields(type) {
+            ['date', 'range', 'month', 'year'].forEach(t => {
+                const el = document.getElementById('field-' + t);
+                if (el) el.classList.add('hidden');
+            });
+            const active = document.getElementById('field-' + type);
+            if (active) active.classList.remove('hidden');
+        }
+
+        (function () {
+            const modal = document.getElementById('mapsModal');
+            const mapsContainer = document.getElementById('mapsContainer');
+            const emptyState = document.getElementById('mapsEmpty');
+            const emptyMsg = document.getElementById('mapsEmptyMessage');
+            const dateLabel = document.getElementById('mapsModalDate');
+            const karyCoords = document.getElementById('mapsKaryawanCoords');
+            const karyJam = document.getElementById('mapsKaryawanJam');
+            const distanceStatus = document.getElementById('mapsDistanceStatus');
+            const extLink = document.getElementById('mapsOpenExternal');
+            const dirLink = document.getElementById('mapsOpenDirections');
+            const tabIn = document.getElementById('tabClockIn');
+            const tabOut = document.getElementById('tabClockOut');
+            const tabInTime = document.getElementById('tabClockInTime');
+            const tabOutTime = document.getElementById('tabClockOutTime');
+
+            const OFFICE = (window.OFFICE_LAT && window.OFFICE_LNG)
+                ? { lat: parseFloat(window.OFFICE_LAT), lng: parseFloat(window.OFFICE_LNG) }
+                : null;
+            const RADIUS = parseFloat(window.OFFICE_RADIUS) || 100;
+
+            let current = null;
+            let map = null;
+            let karyMarker = null;
+            let officeMarker = null;
+            let radiusCircle = null;
+
+            const ACTIVE_TAB_CLASSES = ['border-brown-500', 'text-white', 'bg-brown-600/20'];
+            const INACTIVE_TAB_CLASSES = ['border-transparent', 'text-brown-300'];
+
+            function setActiveTab(which) {
+                if (which === 'in') {
+                    tabIn.classList.add(...ACTIVE_TAB_CLASSES);
+                    tabIn.classList.remove(...INACTIVE_TAB_CLASSES);
+                    tabOut.classList.remove(...ACTIVE_TAB_CLASSES);
+                    tabOut.classList.add(...INACTIVE_TAB_CLASSES);
+                } else {
+                    tabOut.classList.add(...ACTIVE_TAB_CLASSES);
+                    tabOut.classList.remove(...INACTIVE_TAB_CLASSES);
+                    tabIn.classList.remove(...ACTIVE_TAB_CLASSES);
+                    tabIn.classList.add(...INACTIVE_TAB_CLASSES);
+                }
+            }
+
+            function ensureMapsLoaded(cb) {
+                if (typeof google !== 'undefined' && google.maps) { cb(); return; }
+                const t = setInterval(() => {
+                    if (typeof google !== 'undefined' && google.maps) {
+                        clearInterval(t);
+                        cb();
+                    }
+                }, 200);
+                setTimeout(() => clearInterval(t), 8000); // give up after 8s
+            }
+
+            function renderMap(karyLat, karyLng) {
+                ensureMapsLoaded(() => {
+                    // Initialize or reset map
+                    const karyPos = { lat: parseFloat(karyLat), lng: parseFloat(karyLng) };
+                    const center = OFFICE
+                        ? { lat: (OFFICE.lat + karyPos.lat) / 2, lng: (OFFICE.lng + karyPos.lng) / 2 }
+                        : karyPos;
+                    if (!map) {
+                        map = new google.maps.Map(mapsContainer, {
+                            zoom: 16,
+                            center,
+                            mapTypeId: 'roadmap',
+                            fullscreenControl: false,
+                            streetViewControl: false
+                        });
+                    } else {
+                        map.setCenter(center);
+                    }
+                    // Trigger resize so map renders fully inside the modal
+                    setTimeout(() => google.maps.event.trigger(map, 'resize'), 50);
+
+                    // Karyawan marker (red)
+                    if (karyMarker) karyMarker.setMap(null);
+                    karyMarker = new google.maps.Marker({
+                        position: karyPos,
+                        map,
+                        title: 'Lokasi Karyawan',
+                        icon: {
+                            path: google.maps.SymbolPath.CIRCLE,
+                            scale: 9,
+                            fillColor: '#ef4444',
+                            fillOpacity: 1,
+                            strokeColor: '#fff',
+                            strokeWeight: 2
+                        }
+                    });
+
+                    // Office marker + radius (blue)
+                    if (officeMarker) officeMarker.setMap(null);
+                    if (radiusCircle) radiusCircle.setMap(null);
+                    if (OFFICE) {
+                        officeMarker = new google.maps.Marker({
+                            position: OFFICE,
+                            map,
+                            title: 'Lokasi Kantor',
+                            icon: {
+                                path: google.maps.SymbolPath.CIRCLE,
+                                scale: 10,
+                                fillColor: '#3b82f6',
+                                fillOpacity: 1,
+                                strokeColor: '#fff',
+                                strokeWeight: 2
+                            }
+                        });
+                        radiusCircle = new google.maps.Circle({
+                            center: OFFICE,
+                            radius: RADIUS,
+                            map,
+                            fillColor: '#3b82f6',
+                            fillOpacity: 0.12,
+                            strokeColor: '#3b82f6',
+                            strokeWeight: 1
+                        });
+
+                        // Auto-fit bounds to include both markers + radius
+                        const bounds = new google.maps.LatLngBounds();
+                        bounds.extend(karyPos);
+                        bounds.extend(OFFICE);
+                        bounds.union(radiusCircle.getBounds());
+                        map.fitBounds(bounds, 60);
+                    } else {
+                        map.setZoom(17);
+                    }
+                });
+            }
+
+            function showLocation(which) {
+                if (!current) return;
+                setActiveTab(which);
+                const lat = which === 'in' ? current.latIn : current.latOut;
+                const lng = which === 'in' ? current.lngIn : current.lngOut;
+                const jamLabel = which === 'in' ? ('Jam Masuk: ' + current.jamIn) : ('Jam Keluar: ' + current.jamOut);
+                const jarakVal = which === 'in' ? current.jarakIn : current.jarakOut;
+
+                if (!lat || !lng) {
+                    mapsContainer.style.visibility = 'hidden';
+                    emptyState.classList.remove('hidden');
+                    emptyState.classList.add('flex');
+                    const isInOrOut = which === 'in' ? 'Clock In' : 'Clock Out';
+                    const hasTime = (which === 'in' ? current.jamIn : current.jamOut);
+                    emptyMsg.textContent = (hasTime && hasTime !== '-')
+                        ? `Lokasi ${isInOrOut} tidak tersimpan`
+                        : `Karyawan belum melakukan ${isInOrOut}`;
+                    karyCoords.textContent = '-';
+                    karyJam.textContent = jamLabel;
+                    distanceStatus.innerHTML = '<span class="text-brown-400">Tidak dapat menghitung jarak</span>';
+                    extLink.href = '#';
+                    extLink.style.opacity = '0.4';
+                    extLink.style.pointerEvents = 'none';
+                    dirLink.classList.add('hidden');
+                    return;
+                }
+
+                mapsContainer.style.visibility = 'visible';
+                emptyState.classList.add('hidden');
+                emptyState.classList.remove('flex');
+                karyCoords.textContent = 'Lat: ' + lat + '  |  Lng: ' + lng;
+                karyJam.textContent = `${jamLabel}  •  Jarak ke kantor: ${jarakVal} m`;
+
+                // Distance status badge
+                if (OFFICE) {
+                    const d = parseFloat(jarakVal) || 0;
+                    if (d <= RADIUS) {
+                        distanceStatus.innerHTML = `<span class="inline-flex items-center gap-1 rounded-full bg-green-900/60 text-green-200 px-3 py-1 text-xs font-semibold"><i class="fas fa-check-circle"></i>Dalam radius kantor (${d} m / ${RADIUS} m)</span>`;
+                    } else {
+                        distanceStatus.innerHTML = `<span class="inline-flex items-center gap-1 rounded-full bg-yellow-900/60 text-yellow-200 px-3 py-1 text-xs font-semibold"><i class="fas fa-exclamation-triangle"></i>Di luar radius kantor (${d} m / ${RADIUS} m)</span>`;
+                    }
+                    dirLink.classList.remove('hidden');
+                    dirLink.href = `https://www.google.com/maps/dir/?api=1&origin=${OFFICE.lat},${OFFICE.lng}&destination=${lat},${lng}`;
+                } else {
+                    distanceStatus.innerHTML = '<span class="text-brown-400 text-xs italic">Lokasi kantor belum di-set di Pengaturan Lokasi</span>';
+                    dirLink.classList.add('hidden');
+                }
+
+                extLink.href = 'https://www.google.com/maps?q=' + encodeURIComponent(lat + ',' + lng);
+                extLink.style.opacity = '1';
+                extLink.style.pointerEvents = 'auto';
+
+                renderMap(lat, lng);
+            }
+
+            function openMap(data) {
+                current = data;
+                dateLabel.textContent = 'Tanggal: ' + (data.tanggal || '-');
+                tabInTime.textContent = data.jamIn ? '(' + data.jamIn + ')' : '';
+                tabOutTime.textContent = data.jamOut && data.jamOut !== '-' ? '(' + data.jamOut + ')' : '';
+                const startTab = (data.latIn && data.lngIn) ? 'in' : 'out';
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                // Defer showLocation slightly so the modal is visible & div has dimensions
+                setTimeout(() => showLocation(startTab), 100);
+            }
+            function closeMap() {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+                current = null;
+            }
+
+            document.querySelectorAll('.btn-show-map').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    openMap({
+                        tanggal: btn.dataset.tanggal,
+                        latIn: btn.dataset.latIn,
+                        lngIn: btn.dataset.lngIn,
+                        jamIn: btn.dataset.jamIn,
+                        jarakIn: btn.dataset.jarakIn || '0',
+                        latOut: btn.dataset.latOut,
+                        lngOut: btn.dataset.lngOut,
+                        jamOut: btn.dataset.jamOut,
+                        jarakOut: btn.dataset.jarakOut || '0'
+                    });
+                });
+            });
+
+            tabIn.addEventListener('click', () => showLocation('in'));
+            tabOut.addEventListener('click', () => showLocation('out'));
+            document.getElementById('btnCloseMapsModal').addEventListener('click', closeMap);
+            modal.addEventListener('click', e => { if (e.target === modal) closeMap(); });
+            document.addEventListener('keydown', e => { if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeMap(); });
+        })();
+    </script>
+</body>
+</html>

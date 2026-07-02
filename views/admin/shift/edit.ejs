@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/css/tailwind.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-dark-900 min-h-screen" style="background:#1a1d20;">
+    <%- include('../../partials/navbar') %>
+    <div class="pt-20">
+        <div class="flex flex-col lg:flex-row">
+            <%- include('../../partials/sidebar', { currentPage: 'shift' }) %>
+            <div class="flex-1 lg:ml-64 p-4 sm:p-6 lg:p-8">
+                <div class="mb-6">
+                    <a href="/admin/shift" class="text-brown-300 hover:text-white"><i class="fas fa-arrow-left mr-2"></i>Kembali</a>
+                    <h1 class="mt-3 text-3xl font-bold text-white">Edit Shift</h1>
+                </div>
+                <% if (error && error.length) { %><div class="mb-4 rounded-lg border border-red-700 bg-red-900/60 px-4 py-3 text-red-200"><%= error %></div><% } %>
+                <form method="POST" action="/admin/shift/update" class="space-y-4 rounded-xl border border-brown-700/40 bg-dark-800 p-6">
+                    <input type="hidden" name="id" value="<%= shift.id %>">
+                    <div class="grid gap-4 md:grid-cols-2">
+                        <input name="nama_shift" required value="<%= shift.nama_shift %>" class="rounded-lg border border-brown-700/40 bg-dark-700 px-4 py-3 text-white">
+                        <input name="kode_shift" value="<%= shift.kode_shift || '' %>" class="rounded-lg border border-brown-700/40 bg-dark-700 px-4 py-3 text-white">
+                        <input type="time" name="jam_masuk" required value="<%= String(shift.jam_masuk).substring(0,5) %>" class="rounded-lg border border-brown-700/40 bg-dark-700 px-4 py-3 text-white">
+                        <input type="time" name="jam_keluar" required value="<%= String(shift.jam_keluar).substring(0,5) %>" class="rounded-lg border border-brown-700/40 bg-dark-700 px-4 py-3 text-white">
+                    </div>
+                    <label class="flex items-center gap-3 text-brown-200"><input type="checkbox" name="status" value="1" <%= shift.status ? 'checked' : '' %>> Shift aktif</label>
+                    <div class="flex justify-end gap-3">
+                        <a href="/admin/shift" class="rounded-lg border border-brown-700/40 px-4 py-3 text-brown-300">Batal</a>
+                        <button type="submit" class="rounded-lg bg-brown-600 px-4 py-3 text-white">Simpan Perubahan</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

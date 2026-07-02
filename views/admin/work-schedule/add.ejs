@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/css/tailwind.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #212529;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #a67c52;
+            border-radius: 4px;
+            border: 1px solid #343a40;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #b8956b;
+        }
+        .solid-background {
+            background: #1a1d20;
+        }
+        .glow-brown {
+            box-shadow: 0 2px 8px rgba(166, 124, 82, 0.2);
+        }
+        .card-hover {
+            transition: all 0.2s ease;
+        }
+        .card-hover:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        .text-glow {
+            text-shadow: 0 0 10px rgba(166, 124, 82, 0.5);
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-dark-900 min-h-screen solid-background">
+    <%- include('../../partials/navbar') %>
+
+    <!-- Content with proper spacing for fixed navbar -->
+    <div class="pt-16 sm:pt-20 lg:pt-20">
+        <!-- Mobile menu spacing -->
+        <div class="lg:hidden pt-16 sm:pt-20"></div>
+        
+        <!-- Sidebar & Content -->
+        <div class="flex flex-col lg:flex-row">
+            <%- include('../../partials/sidebar', { currentPage: 'work-schedule' }) %>
+
+            <!-- Main Content with sidebar spacing -->
+            <div class="flex-1 lg:ml-64 p-4 sm:p-6 lg:p-8 min-h-screen">
+                <div class="mb-6 sm:mb-8">
+                    <div class="flex items-center mb-2">
+                        <a href="/admin/work-schedule" class="text-brown-400 hover:text-brown-300 mr-4 transition-colors duration-200">
+                            <i class="fas fa-arrow-left text-lg sm:text-xl"></i>
+                        </a>
+                        <div class="flex items-center space-x-3">
+                            <div class="w-8 h-8 flex items-center justify-center">
+                                <i class="fas fa-plus text-brown-400 text-xl"></i>
+                            </div>
+                            <h2 class="text-2xl sm:text-3xl font-bold text-white text-glow">Tambah Jadwal Kerja</h2>
+                        </div>
+                    </div>
+                    <p class="text-brown-300 text-sm sm:text-base ml-12">Buat jadwal kerja baru untuk karyawan</p>
+                </div>
+
+                <!-- Flash Messages -->
+                <% if (error && error.length > 0) { %>
+                    <div class="bg-red-900/80 border border-red-600/50 text-red-200 px-4 py-3 rounded-lg mb-4 shadow-lg backdrop-blur-sm fade-in">
+                        <i class="fas fa-exclamation-circle mr-2"></i><%= error %>
+                    </div>
+                <% } %>
+
+                <!-- Form -->
+                <div class="bg-dark-800 rounded-xl shadow-2xl p-6 sm:p-8 border border-brown-600/30 card-hover glow-brown fade-in">
+                    <form method="POST" action="/admin/work-schedule/add" class="space-y-6">
+                        <!-- Basic Info -->
+                        <div>
+                            <label for="nama" class="block text-sm font-semibold text-brown-300 mb-2">
+                                <i class="fas fa-tag mr-2"></i>Nama Jadwal *
+                            </label>
+                            <input type="text" id="nama" name="nama" required
+                                   class="w-full px-4 py-3 bg-dark-700 border border-brown-600/50 rounded-lg focus:ring-2 focus:ring-brown-500 focus:border-brown-400 transition duration-200 text-white placeholder-brown-400"
+                                   placeholder="Contoh: Shift Pagi, Shift Malam, Regular">
+                        </div>
+
+                        <div>
+                            <label for="shift_id" class="block text-sm font-semibold text-brown-300 mb-2">
+                                <i class="fas fa-business-time mr-2"></i>Shift Terkait
+                            </label>
+                            <select id="shift_id" name="shift_id"
+                                    class="w-full px-4 py-3 bg-dark-700 border border-brown-600/50 rounded-lg focus:ring-2 focus:ring-brown-500 focus:border-brown-400 transition duration-200 text-white">
+                                <option value="">Pilih Shift</option>
+                                <% shifts.forEach(function(shift) { %>
+                                    <option value="<%= shift.id %>"><%= shift.nama_shift %> (<%= shift.kode_shift || 'tanpa kode' %>)</option>
+                                <% }) %>
+                            </select>
+                        </div>
+
+                        <div class="rounded-lg border border-brown-600/30 bg-dark-700/60 px-4 py-4 text-sm text-brown-200">
+                            Waktu presensi dihitung otomatis dari shift:
+                            check-in mulai 30 menit sebelum jam masuk sampai 2 jam setelah jam masuk, dan check-out mulai 1 jam sebelum jam pulang sampai 3 jam setelah jam pulang.
+                        </div>
+
+                        <!-- Work Days -->
+                        <div>
+                            <label class="block text-sm font-semibold text-brown-300 mb-3">
+                                <i class="fas fa-calendar mr-2"></i>Hari Kerja
+                            </label>
+                            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+                                <label class="flex items-center space-x-2 cursor-pointer">
+                                    <input type="checkbox" name="work_days" value="monday" checked
+                                           class="w-4 h-4 text-brown-600 bg-dark-700 border-brown-600/50 rounded focus:ring-brown-500 focus:ring-2">
+                                    <span class="text-brown-200">Senin</span>
+                                </label>
+                                <label class="flex items-center space-x-2 cursor-pointer">
+                                    <input type="checkbox" name="work_days" value="tuesday" checked
+                                           class="w-4 h-4 text-brown-600 bg-dark-700 border-brown-600/50 rounded focus:ring-brown-500 focus:ring-2">
+                                    <span class="text-brown-200">Selasa</span>
+                                </label>
+                                <label class="flex items-center space-x-2 cursor-pointer">
+                                    <input type="checkbox" name="work_days" value="wednesday" checked
+                                           class="w-4 h-4 text-brown-600 bg-dark-700 border-brown-600/50 rounded focus:ring-brown-500 focus:ring-2">
+                                    <span class="text-brown-200">Rabu</span>
+                                </label>
+                                <label class="flex items-center space-x-2 cursor-pointer">
+                                    <input type="checkbox" name="work_days" value="thursday" checked
+                                           class="w-4 h-4 text-brown-600 bg-dark-700 border-brown-600/50 rounded focus:ring-brown-500 focus:ring-2">
+                                    <span class="text-brown-200">Kamis</span>
+                                </label>
+                                <label class="flex items-center space-x-2 cursor-pointer">
+                                    <input type="checkbox" name="work_days" value="friday" checked
+                                           class="w-4 h-4 text-brown-600 bg-dark-700 border-brown-600/50 rounded focus:ring-brown-500 focus:ring-2">
+                                    <span class="text-brown-200">Jumat</span>
+                                </label>
+                                <label class="flex items-center space-x-2 cursor-pointer">
+                                    <input type="checkbox" name="work_days" value="saturday" checked
+                                           class="w-4 h-4 text-brown-600 bg-dark-700 border-brown-600/50 rounded focus:ring-brown-500 focus:ring-2">
+                                    <span class="text-brown-200">Sabtu</span>
+                                </label>
+                                <label class="flex items-center space-x-2 cursor-pointer">
+                                    <input type="checkbox" name="work_days" value="sunday"
+                                           class="w-4 h-4 text-brown-600 bg-dark-700 border-brown-600/50 rounded focus:ring-brown-500 focus:ring-2">
+                                    <span class="text-brown-200">Minggu</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-4 pt-4">
+                            <a href="/admin/work-schedule" 
+                               class="px-6 py-3 border border-brown-600/50 text-brown-300 rounded-lg hover:bg-brown-800/30 transition duration-200 text-center">
+                                Batal
+                            </a>
+                            <button type="submit" 
+                                    class="px-6 py-3 bg-brown-600 hover:bg-brown-500 text-white rounded-lg transition duration-200 shadow-lg hover:shadow-brown-500/30">
+                                <i class="fas fa-save mr-2"></i>Simpan Jadwal
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Real-time Clock
+        function updateClock() {
+            try {
+                const now = new Date();
+                const options = {
+                    day: '2-digit',
+                    month: '2-digit', 
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    timeZone: 'Asia/Makassar' // WITA timezone
+                };
+                
+                const timeString = now.toLocaleString('id-ID', options);
+                const clockElement = document.getElementById('currentTime');
+                
+                if (clockElement) {
+                    clockElement.textContent = timeString;
+                }
+            } catch (error) {
+                console.error('Clock update error:', error);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const clockElement = document.getElementById('currentTime');
+            
+            if (clockElement) {
+                updateClock();
+                setInterval(updateClock, 1000);
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/css/tailwind.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-gradient-to-br from-dark-900 via-dark-800 to-coffee-900 min-h-screen">
+    <%- body %>
+
+    <!-- Real-time Clock Script -->
+    <script>
+        function updateClock() {
+            const now = new Date();
+            const options = {
+                timeZone: 'Asia/Makassar', // WITA (Bali time)
+                hour12: false,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            };
+            
+            const timeString = now.toLocaleString('id-ID', options);
+            const clockElement = document.getElementById('currentTime');
+            
+            if (clockElement) {
+                // Format: DD/MM/YYYY HH:MM:SS
+                clockElement.textContent = timeString;
+            }
+        }
+
+        // Update clock immediately and then every second
+        if (document.getElementById('currentTime')) {
+            updateClock();
+            setInterval(updateClock, 1000);
+        }
+    </script>
+</body>
+</html>

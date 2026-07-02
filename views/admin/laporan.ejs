@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/css/tailwind.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        /* Custom Dark Theme Styles */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #212529;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #a67c52;
+            border-radius: 4px;
+            border: 1px solid #343a40;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #b8956b;
+        }
+        .solid-background {
+            background: #1a1d20;
+        }
+        .glow-brown {
+            box-shadow: 0 0 20px rgba(166, 124, 82, 0.3);
+        }
+        .glow-brown:hover {
+            box-shadow: 0 0 30px rgba(166, 124, 82, 0.5);
+        }
+        .card-hover {
+            transition: all 0.3s ease;
+            transform: translateY(0);
+        }
+        .card-hover:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+        .text-glow {
+            text-shadow: 0 0 10px rgba(166, 124, 82, 0.5);
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .glass-effect {
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            background: rgba(33, 37, 41, 0.8);
+            border: 1px solid rgba(166, 124, 82, 0.3);
+        }
+        
+        /* Tab System Styles */
+        .tab-button {
+            color: #d4bfa6;
+            background: transparent;
+            border-bottom: 3px solid transparent;
+        }
+        .tab-button:hover {
+            color: #b8956b;
+            background: rgba(166, 124, 82, 0.1);
+        }
+        .tab-button.active {
+            color: #ffffff;
+            background: rgba(166, 124, 82, 0.2);
+            border-bottom-color: #a67c52;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body class="bg-dark-900 min-h-screen solid-background">
+    <%
+    function uploadUrl(value) {
+        if (!value) return '/LogoApp.jpeg';
+        const normalized = String(value).replace(/\\/g, '/').replace(/^public\//, '');
+        if (/^https?:\/\//i.test(normalized)) return normalized;
+        return '/' + normalized;
+    }
+    %>
+    <%- include('../partials/navbar') %>
+
+    <!-- Content with proper spacing for fixed navbar -->
+    <div class="pt-16 sm:pt-20 lg:pt-20">
+        <!-- Mobile menu spacing -->
+        <div class="lg:hidden pt-16 sm:pt-20"></div>
+        
+        <!-- Sidebar & Content -->
+        <div class="flex flex-col lg:flex-row">
+            <%- include('../partials/sidebar', { currentPage: (typeof currentPage !== 'undefined' && currentPage) ? currentPage : 'laporan' }) %>
+
+            <!-- Main Content with sidebar spacing -->
+            <div class="flex-1 lg:ml-64 p-4 sm:p-6 lg:p-8 min-h-screen">
+                <div class="mb-6 sm:mb-8">
+                    <% const isPresensiPage = (typeof currentPage !== 'undefined' && currentPage === 'presensi'); %>
+                    <div class="flex items-center space-x-3 mb-2">
+                        <div class="w-8 h-8 flex items-center justify-center">
+                            <i class="fas <%= isPresensiPage ? 'fa-calendar-check' : 'fa-chart-line' %> text-brown-400 text-xl"></i>
+                        </div>
+                        <h2 class="text-2xl sm:text-3xl font-bold text-white"><%= isPresensiPage ? 'Daftar Presensi' : 'Laporan Presensi' %></h2>
+                    </div>
+                    <p class="text-brown-300 text-sm sm:text-base"><%= isPresensiPage ? 'Daftar kehadiran harian karyawan FLEUR CAFÉ - Atelier d\'artistes' : 'Laporan kehadiran karyawan FLEUR CAFÉ - Atelier d\'artistes' %></p>
+                </div>
+
+                <!-- Filter -->
+                <div class="bg-dark-800 rounded-xl shadow-2xl p-4 sm:p-6 mb-6 border border-brown-600/30">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-bold text-white flex items-center">
+                            <i class="fas fa-filter text-brown-400 mr-3"></i>
+                            Filter Laporan
+                        </h3>
+                        <button id="btnExport" class="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg transition duration-200 text-sm shadow-lg">
+                            <i class="fas fa-file-excel mr-2"></i>Export Excel
+                        </button>
+                    </div>
+                    
+                    <form method="GET" action="/admin/laporan" id="filterForm">
+                        <!-- Filter Type Selection -->
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-brown-300 mb-2">Tipe Filter</label>
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                <button type="button" onclick="setFilterType('date', this)" 
+                                        class="filter-type-btn px-4 py-2 rounded-lg border transition duration-200 <%= filter.filterType === 'date' || !filter.filterType ? 'bg-brown-600 border-brown-500 text-white' : 'bg-dark-700 border-brown-600/50 text-brown-300 hover:bg-dark-600' %>">
+                                    <i class="fas fa-calendar-day mr-2"></i>Tanggal
+                                </button>
+                                <button type="button" onclick="setFilterType('range', this)" 
+                                        class="filter-type-btn px-4 py-2 rounded-lg border transition duration-200 <%= filter.filterType === 'range' ? 'bg-brown-600 border-brown-500 text-white' : 'bg-dark-700 border-brown-600/50 text-brown-300 hover:bg-dark-600' %>">
+                                    <i class="fas fa-calendar-week mr-2"></i>Rentang
+                                </button>
+                                <button type="button" onclick="setFilterType('month', this)" 
+                                        class="filter-type-btn px-4 py-2 rounded-lg border transition duration-200 <%= filter.filterType === 'month' ? 'bg-brown-600 border-brown-500 text-white' : 'bg-dark-700 border-brown-600/50 text-brown-300 hover:bg-dark-600' %>">
+                                    <i class="fas fa-calendar-alt mr-2"></i>Bulan
+                                </button>
+                                <button type="button" onclick="setFilterType('year', this)" 
+                                        class="filter-type-btn px-4 py-2 rounded-lg border transition duration-200 <%= filter.filterType === 'year' ? 'bg-brown-600 border-brown-500 text-white' : 'bg-dark-700 border-brown-600/50 text-brown-300 hover:bg-dark-600' %>">
+                                    <i class="fas fa-calendar mr-2"></i>Tahun
+                                </button>
+                            </div>
+                        </div>
+
+                        <input type="hidden" name="filterType" id="filterType" value="<%= filter.filterType || 'date' %>">
+
+                        <!-- Date Filter -->
+                        <div id="dateFilter" class="filter-content <%= filter.filterType === 'date' || !filter.filterType ? '' : 'hidden' %>">
+                            <label for="tanggal" class="block text-sm font-medium text-brown-300 mb-2">Pilih Tanggal</label>
+                            <input type="date" id="tanggal" name="tanggal" value="<%= filter.tanggal %>"
+                                   class="w-full px-4 py-2 bg-dark-700 border border-brown-600/50 rounded-lg focus:ring-2 focus:ring-brown-500 focus:border-brown-400 transition duration-200 text-white">
+                        </div>
+
+                        <!-- Range Filter -->
+                        <div id="rangeFilter" class="filter-content <%= filter.filterType === 'range' ? '' : 'hidden' %>">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="startDate" class="block text-sm font-medium text-brown-300 mb-2">Tanggal Mulai</label>
+                                    <input type="date" id="startDate" name="startDate" value="<%= filter.startDate || '' %>"
+                                           class="w-full px-4 py-2 bg-dark-700 border border-brown-600/50 rounded-lg focus:ring-2 focus:ring-brown-500 focus:border-brown-400 transition duration-200 text-white">
+                                </div>
+                                <div>
+                                    <label for="endDate" class="block text-sm font-medium text-brown-300 mb-2">Tanggal Akhir</label>
+                                    <input type="date" id="endDate" name="endDate" value="<%= filter.endDate || '' %>"
+                                           class="w-full px-4 py-2 bg-dark-700 border border-brown-600/50 rounded-lg focus:ring-2 focus:ring-brown-500 focus:border-brown-400 transition duration-200 text-white">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Month Filter -->
+                        <div id="monthFilter" class="filter-content <%= filter.filterType === 'month' ? '' : 'hidden' %>">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="month" class="block text-sm font-medium text-brown-300 mb-2">Bulan</label>
+                                    <select id="month" name="month" class="w-full px-4 py-2 bg-dark-700 border border-brown-600/50 rounded-lg focus:ring-2 focus:ring-brown-500 focus:border-brown-400 transition duration-200 text-white">
+                                        <option value="">Pilih Bulan</option>
+                                        <% const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+                                           months.forEach((m, i) => { %>
+                                            <option value="<%= i + 1 %>" <%= filter.month == (i + 1) ? 'selected' : '' %>><%= m %></option>
+                                        <% }); %>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="yearMonth" class="block text-sm font-medium text-brown-300 mb-2">Tahun</label>
+                                    <input type="number" id="yearMonth" name="year" value="<%= filter.year || new Date().getFullYear() %>" min="2020" max="2100"
+                                           class="w-full px-4 py-2 bg-dark-700 border border-brown-600/50 rounded-lg focus:ring-2 focus:ring-brown-500 focus:border-brown-400 transition duration-200 text-white">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Year Filter -->
+                        <div id="yearFilter" class="filter-content <%= filter.filterType === 'year' ? '' : 'hidden' %>">
+                            <label for="yearOnly" class="block text-sm font-medium text-brown-300 mb-2">Pilih Tahun</label>
+                            <input type="number" id="yearOnly" name="year" value="<%= filter.year || new Date().getFullYear() %>" min="2020" max="2100"
+                                   class="w-full px-4 py-2 bg-dark-700 border border-brown-600/50 rounded-lg focus:ring-2 focus:ring-brown-500 focus:border-brown-400 transition duration-200 text-white">
+                        </div>
+
+                        <div class="flex space-x-2 mt-4">
+                            <button type="submit" class="bg-brown-600 hover:bg-brown-500 text-white px-6 py-2 rounded-lg transition duration-200 text-sm shadow-lg flex-1">
+                                <i class="fas fa-search mr-2"></i>Tampilkan
+                            </button>
+                            <a href="/admin/laporan" class="bg-gray-600 hover:bg-gray-500 text-white px-6 py-2 rounded-lg transition duration-200 text-sm shadow-lg text-center">
+                                <i class="fas fa-refresh mr-2"></i>Reset
+                            </a>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Tab Navigation -->
+                <div class="bg-dark-800 rounded-xl shadow-2xl mb-6 border border-brown-600/30">
+                    <div class="flex border-b border-brown-600/30">
+                        <button id="tabTable" class="tab-button active flex-1 px-6 py-4 text-center font-medium transition duration-200 rounded-tl-xl">
+                            <i class="fas fa-table mr-2"></i>
+                            Tabel Presensi
+                        </button>
+                        <button id="tabMap" class="tab-button flex-1 px-6 py-4 text-center font-medium transition duration-200 rounded-tr-xl">
+                            <i class="fas fa-map-marked-alt mr-2"></i>
+                            Peta Lokasi
+                        </button>
+                        <button id="tabSummary" class="tab-button flex-1 px-6 py-4 text-center font-medium transition duration-200 rounded-tr-xl">
+                            <i class="fas fa-chart-pie mr-2"></i>
+                            Ringkasan
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tab Content: Table -->
+                <div id="contentTable" class="tab-content active">
+                <div class="bg-dark-800 rounded-xl shadow-2xl overflow-hidden border border-brown-600/30">
+                    <!-- Mobile Card View -->
+                    <div class="block lg:hidden">
+                        <% if (presensi.length === 0) { %>
+                            <div class="p-6 text-center text-brown-300">
+                                <i class="fas fa-inbox text-4xl mb-4 text-brown-400"></i>
+                                <p>Tidak ada data presensi untuk tanggal yang dipilih</p>
+                            </div>
+                        <% } else { %>
+                            <% presensi.forEach(function(p) { %>
+                                <div class="border-b border-brown-600/30 p-4">
+                                    <div class="flex items-start space-x-4">
+                                        <% const photoSrc = uploadUrl(p.profile_picture || p.foto_masuk); %>
+                                        <img src="<%= photoSrc %>" alt="Foto <%= p.nama %>"
+                                             onerror="this.src='/LogoApp.jpeg'; this.onerror=null;"
+                                             class="w-16 h-16 rounded-lg object-cover cursor-pointer flex-shrink-0 border-2 border-brown-600/50"
+                                             onclick="showImage('<%= photoSrc %>')">
+                                        <div class="flex-1 min-w-0">
+                                            <div class="flex items-center justify-between mb-2">
+                                                <h3 class="font-semibold text-white truncate"><%= p.nama %></h3>
+                                                <% if (['hadir', 'present', 'late'].includes(String(p.status || '').toLowerCase())) { %>
+                                                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-900/50 text-green-300 border border-green-600/50">
+                                                        <i class="fas fa-check-circle mr-1"></i>
+                                                        Hadir
+                                                    </span>
+                                                <% } else { %>
+                                                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-900/50 text-red-300 border border-red-600/50">
+                                                        <i class="fas fa-exclamation-triangle mr-1"></i>
+                                                        <%= p.status %>
+                                                    </span>
+                                                <% } %>
+                                            </div>
+                                            <p class="text-sm text-brown-300 mb-1"><%= p.jabatan %></p>
+                                            <p class="text-sm text-brown-300 mb-2">
+                                                <%= new Date(p.tanggal).toLocaleDateString('id-ID') %> 
+                                                <% if (p.jam_masuk) { %>- Masuk: <%= p.jam_masuk %><% } %>
+                                                <% if (p.jam_keluar) { %> - Keluar: <%= p.jam_keluar %><% } %>
+                                            </p>
+                                            <div class="flex items-center justify-between">
+                                                <span class="text-sm text-brown-300">Jarak: <%= p.distance_in || 0 %> m</span>
+                                                <a href="https://www.google.com/maps?q=<%= p.lat_masuk %>,<%= p.long_masuk %>" 
+                                                   target="_blank" 
+                                                   class="text-blue-400 hover:text-blue-300 transition duration-200 text-sm">
+                                                    <i class="fas fa-map-marker-alt mr-1"></i>
+                                                    Lihat Maps
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            <% }); %>
+                        <% } %>
+                    </div>
+
+                    <!-- Desktop Table View -->
+                    <div class="hidden lg:block overflow-x-auto">
+                        <table class="min-w-full divide-y divide-brown-600/30">
+                            <thead class="bg-brown-800">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-brown-200 uppercase tracking-wider">Nama</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-brown-200 uppercase tracking-wider">Jabatan</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-brown-200 uppercase tracking-wider">Tanggal</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-brown-200 uppercase tracking-wider">Jam Masuk</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-brown-200 uppercase tracking-wider">Jam Keluar</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-brown-200 uppercase tracking-wider">Status</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-brown-200 uppercase tracking-wider">Jarak</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-brown-200 uppercase tracking-wider">Maps</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-brown-600/30">
+                                <% if (presensi.length === 0) { %>
+                                    <tr>
+                                        <td colspan="8" class="px-6 py-8 text-center text-brown-300">
+                                            <i class="fas fa-inbox text-4xl mb-4 text-brown-400"></i>
+                                            <p>Tidak ada data presensi untuk tanggal yang dipilih</p>
+                                        </td>
+                                    </tr>
+                                <% } else { %>
+                                    <% presensi.forEach(function(p) { %>
+                                        <tr class="hover:bg-dark-600/50 transition duration-200">
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">
+                                                <%= p.nama %>
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-brown-200">
+                                                <%= p.jabatan %>
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-brown-200">
+                                                <%= new Date(p.tanggal).toLocaleDateString('id-ID') %>
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-brown-200">
+                                                <%= p.jam_masuk || '-' %>
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-brown-200">
+                                                <%= p.jam_keluar || '-' %>
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap">
+                                                <% if (['hadir', 'present', 'late'].includes(String(p.status || '').toLowerCase())) { %>
+                                                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-900/50 text-green-300 border border-green-600/50">
+                                                        <i class="fas fa-check-circle mr-1"></i>
+                                                        Hadir
+                                                    </span>
+                                                <% } else { %>
+                                                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-900/50 text-red-300 border border-red-600/50">
+                                                        <i class="fas fa-exclamation-triangle mr-1"></i>
+                                                        <%= p.status %>
+                                                    </span>
+                                                <% } %>
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-brown-200">
+                                                <%= p.distance_in || 0 %> m
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                                <a href="https://www.google.com/maps?q=<%= p.lat_masuk %>,<%= p.long_masuk %>" 
+                                                   target="_blank" 
+                                                   class="text-blue-400 hover:text-blue-300 transition duration-200">
+                                                    <i class="fas fa-map-marker-alt mr-1"></i>
+                                                    Lihat Maps
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    <% }); %>
+                                <% } %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Summary -->
+                <% if (presensi.length > 0) { %>
+                    <div class="mt-6 bg-dark-800 rounded-xl shadow-2xl p-4 sm:p-6 border border-brown-600/30">
+                        <h3 class="text-lg font-bold text-white mb-4 flex items-center">
+                            <i class="fas fa-chart-pie text-brown-400 mr-3"></i>
+                            Ringkasan
+                        </h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div class="text-center p-4 bg-blue-900/50 rounded-lg border border-blue-600/30">
+                                <div class="text-2xl font-bold text-blue-300"><%= presensi.length %></div>
+                                <div class="text-sm text-blue-200">Total Presensi</div>
+                            </div>
+                            <div class="text-center p-4 bg-green-900/50 rounded-lg border border-green-600/30">
+                                <div class="text-2xl font-bold text-green-300">
+                                    <%= presensi.filter(p => ['hadir', 'present', 'late'].includes(String(p.status || '').toLowerCase())).length %>
+                                </div>
+                                <div class="text-sm text-green-200">Hadir</div>
+                            </div>
+                            <div class="text-center p-4 bg-red-900/50 rounded-lg border border-red-600/30">
+                                <div class="text-2xl font-bold text-red-300">
+                                    <%= presensi.filter(p => !['hadir', 'present', 'late'].includes(String(p.status || '').toLowerCase())).length %>
+                                </div>
+                                <div class="text-sm text-red-200">Tidak Hadir</div>
+                            </div>
+                        </div>
+                    </div>
+                <% } %>
+                </div>
+
+                <!-- Tab Content: Map -->
+                <div id="contentMap" class="tab-content">
+                    <% if (presensi.length === 0) { %>
+                        <div class="bg-dark-800 rounded-xl shadow-2xl p-6 border border-brown-600/30 text-center text-brown-300">
+                            <i class="fas fa-inbox text-4xl mb-4 text-brown-400"></i>
+                            <p>Tidak ada data presensi untuk ditampilkan di peta</p>
+                        </div>
+                    <% } else { %>
+                        <div class="bg-dark-800 rounded-xl shadow-2xl p-6 border border-brown-600/30">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-lg font-bold text-white flex items-center">
+                                    <i class="fas fa-map text-brown-400 mr-3"></i>
+                                    Peta Lokasi Presensi
+                                </h3>
+                            </div>
+                            <div id="attendanceMapTab" class="rounded-lg h-96 border border-brown-600/50"></div>
+                            <div class="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+                                <div class="flex items-center text-brown-200">
+                                    <div class="w-4 h-4 bg-blue-500 rounded-full mr-2"></div>
+                                    <span>Lokasi Kantor</span>
+                                </div>
+                                <div class="flex items-center text-brown-200">
+                                    <div class="w-4 h-4 bg-green-500 rounded-full mr-2"></div>
+                                    <span>Presensi Hadir</span>
+                                </div>
+                                <div class="flex items-center text-brown-200">
+                                    <div class="w-4 h-4 bg-red-500 rounded-full mr-2"></div>
+                                    <span>Presensi Tidak Hadir</span>
+                                </div>
+                                <div class="flex items-center text-brown-200">
+                                    <div class="w-4 h-4 border-2 border-red-500 rounded-full mr-2 bg-red-100"></div>
+                                    <span>Radius Area Kantor</span>
+                                </div>
+                            </div>
+                        </div>
+                    <% } %>
+                </div>
+
+                <!-- Tab Content: Summary -->
+                <div id="contentSummary" class="tab-content">
+                    <% if (presensi.length === 0) { %>
+                        <div class="bg-dark-800 rounded-xl shadow-2xl p-6 border border-brown-600/30 text-center text-brown-300">
+                            <i class="fas fa-inbox text-4xl mb-4 text-brown-400"></i>
+                            <p>Tidak ada data presensi untuk ditampilkan ringkasan</p>
+                        </div>
+                    <% } else { %>
+                        <!-- Statistics Cards -->
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6">
+                            <div class="bg-dark-800 rounded-xl shadow-2xl p-6 border border-brown-600/30 text-center">
+                                <div class="text-3xl font-bold text-blue-300 mb-2"><%= presensi.length %></div>
+                                <div class="text-brown-200 mb-2">Total Presensi</div>
+                                <i class="fas fa-users text-blue-400 text-2xl"></i>
+                            </div>
+                            <div class="bg-dark-800 rounded-xl shadow-2xl p-6 border border-brown-600/30 text-center">
+                                <div class="text-3xl font-bold text-green-300 mb-2">
+                                    <%= presensi.filter(p => ['hadir', 'present', 'late'].includes(String(p.status || '').toLowerCase())).length %>
+                                </div>
+                                <div class="text-brown-200 mb-2">Hadir</div>
+                                <i class="fas fa-check-circle text-green-400 text-2xl"></i>
+                            </div>
+                            <div class="bg-dark-800 rounded-xl shadow-2xl p-6 border border-brown-600/30 text-center">
+                                <div class="text-3xl font-bold text-red-300 mb-2">
+                                    <%= presensi.filter(p => !['hadir', 'present', 'late'].includes(String(p.status || '').toLowerCase())).length %>
+                                </div>
+                                <div class="text-brown-200 mb-2">Tidak Hadir</div>
+                                <i class="fas fa-exclamation-triangle text-red-400 text-2xl"></i>
+                            </div>
+                        </div>
+
+                        <!-- Percentage Chart -->
+                        <div class="bg-dark-800 rounded-xl shadow-2xl p-6 border border-brown-600/30 mb-6">
+                            <h3 class="text-lg font-bold text-white mb-4 flex items-center">
+                                <i class="fas fa-chart-pie text-brown-400 mr-3"></i>
+                                Persentase Kehadiran
+                            </h3>
+                            <div class="space-y-4">
+                                <% 
+                                const totalPresensi = presensi.length;
+                                const hadir = presensi.filter(p => ['hadir', 'present', 'late'].includes(String(p.status || '').toLowerCase())).length;
+                                const tidakHadir = presensi.filter(p => !['hadir', 'present', 'late'].includes(String(p.status || '').toLowerCase())).length;
+                                const persentaseHadir = totalPresensi > 0 ? Math.round((hadir / totalPresensi) * 100) : 0;
+                                const persentaseTidakHadir = totalPresensi > 0 ? Math.round((tidakHadir / totalPresensi) * 100) : 0;
+                                %>
+                                <div>
+                                    <div class="flex justify-between text-sm text-brown-200 mb-1">
+                                        <span>Hadir</span>
+                                        <span><%= persentaseHadir %>%</span>
+                                    </div>
+                                    <div class="w-full bg-dark-600 rounded-full h-3">
+                                        <div class="bg-green-500 h-3 rounded-full transition-all duration-500" style="width: <%= persentaseHadir %>%"></div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="flex justify-between text-sm text-brown-200 mb-1">
+                                        <span>Tidak Hadir</span>
+                                        <span><%= persentaseTidakHadir %>%</span>
+                                    </div>
+                                    <div class="w-full bg-dark-600 rounded-full h-3">
+                                        <div class="bg-red-500 h-3 rounded-full transition-all duration-500" style="width: <%= persentaseTidakHadir %>%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Employee List -->
+                        <div class="bg-dark-800 rounded-xl shadow-2xl p-6 border border-brown-600/30">
+                            <h3 class="text-lg font-bold text-white mb-4 flex items-center">
+                                <i class="fas fa-list text-brown-400 mr-3"></i>
+                                Daftar Karyawan Hari Ini
+                            </h3>
+                            <div class="space-y-3">
+                                <% 
+                                const uniqueEmployees = {};
+                                presensi.forEach(p => {
+                                    if (!uniqueEmployees[p.nama]) {
+                                        uniqueEmployees[p.nama] = {
+                                            nama: p.nama,
+                                            jabatan: p.jabatan,
+                                            status: p.status,
+                                            tanggal: p.tanggal,
+                                            jam_masuk: p.jam_masuk,
+                                            foto: p.foto_masuk,
+                                            profile_picture: p.profile_picture
+                                        };
+                                    }
+                                });
+                                Object.values(uniqueEmployees).forEach(function(emp) { %>
+                                    <div class="flex items-center justify-between p-3 bg-dark-700 rounded-lg border border-brown-600/30">
+                                        <div class="flex items-center space-x-3">
+                                            <% const empPhotoSrc = uploadUrl(emp.profile_picture || emp.foto); %>
+                                            <img src="<%= empPhotoSrc %>" alt="<%= emp.nama %>"
+                                                 onerror="this.src='/LogoApp.jpeg'; this.onerror=null;"
+                                                 class="w-10 h-10 rounded-full object-cover border-2 border-brown-600/50">
+                                            <div>
+                                                <div class="font-medium text-white"><%= emp.nama %></div>
+                                                <div class="text-sm text-brown-300"><%= emp.jabatan %></div>
+                                            </div>
+                                        </div>
+                                        <div class="text-right">
+                                            <% if (['hadir', 'present', 'late'].includes(String(emp.status || '').toLowerCase())) { %>
+                                                <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-900/50 text-green-300 border border-green-600/50">
+                                                    <i class="fas fa-check-circle mr-1"></i>
+                                                    Hadir
+                                                </span>
+                                            <% } else { %>
+                                                <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-900/50 text-red-300 border border-red-600/50">
+                                                    <i class="fas fa-exclamation-triangle mr-1"></i>
+                                                    <%= emp.status %>
+                                                </span>
+                                            <% } %>
+                                            <div class="text-xs text-brown-400 mt-1">
+                                                <%= emp.jam_masuk || 'Belum absen' %>
+                                            </div>
+                                        </div>
+                                    </div>
+                                <% }); %>
+                            </div>
+                        </div>
+                    <% } %>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Image Modal -->
+    <div id="imageModal" class="fixed inset-0 bg-black bg-opacity-80 hidden items-center justify-center z-50 backdrop-blur-sm">
+        <div class="max-w-3xl max-h-3xl p-4 relative">
+            <img id="modalImage" src="" alt="" class="max-w-full max-h-full rounded-lg shadow-2xl border-2 border-brown-600/50">
+            <button onclick="closeImageModal()" class="absolute top-2 right-2 text-white bg-dark-800/80 hover:bg-dark-700 text-2xl hover:text-brown-300 w-10 h-10 rounded-full flex items-center justify-center transition duration-200">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Google Maps JavaScript API -->
+    <script async defer 
+        src="https://maps.googleapis.com/maps/api/js?key=<%= GOOGLE_MAPS_API_KEY %>&callback=initAttendanceMap">
+    </script>
+
+    <script>
+        let attendanceMapInstance;
+        let attendanceMapTabInstance;
+        let isMapVisible = false;
+
+        // Tab switching functionality
+        function switchTab(tabName) {
+            // Remove active class from all tabs and content
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            // Add active class to clicked tab and corresponding content
+            document.getElementById('tab' + tabName).classList.add('active');
+            document.getElementById('content' + tabName).classList.add('active');
+            
+            // Initialize map when Map tab is clicked
+            if (tabName === 'Map' && !attendanceMapTabInstance) {
+                setTimeout(() => {
+                    initAttendanceMapTab();
+                }, 100);
+            }
+        }
+
+        // Initialize tab event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('tabTable').addEventListener('click', () => switchTab('Table'));
+            document.getElementById('tabMap').addEventListener('click', () => switchTab('Map'));
+            document.getElementById('tabSummary').addEventListener('click', () => switchTab('Summary'));
+        });
+
+        // Attendance data for map
+        const attendanceData = [
+            <% presensi.forEach(function(p, index) { %>
+                {
+                    nama: "<%- (p.nama || '').replace(/"/g, '\\"') %>",
+                    jabatan: "<%- (p.jabatan || '').replace(/"/g, '\\"') %>",
+                    tanggal: "<%= p.tanggal ? new Date(p.tanggal).toLocaleDateString('id-ID') : '' %>",
+                    jam_masuk: "<%= p.jam_masuk || '' %>",
+                    lat: <%= p.lat_masuk != null ? p.lat_masuk : 'null' %>,
+                    lng: <%= p.long_masuk != null ? p.long_masuk : 'null' %>,
+                    status: "<%= p.status || '' %>",
+                    jarak: <%= p.distance_in || 0 %>,
+                    foto: "<%= uploadUrl(p.profile_picture || p.foto_masuk) %>"
+                }<%= index < presensi.length - 1 ? ',' : '' %>
+            <% }); %>
+        ];
+
+        function createMapInstance(mapElementId) {
+            // Office location from settings
+            const officeLat = <%= officeSetting ? officeSetting.lat_kantor : -8.8155675 %>;
+            const officeLng = <%= officeSetting ? officeSetting.long_kantor : 115.1253343 %>;
+            const officeRadius = <%= officeSetting ? officeSetting.radius_meter : 100 %>;
+
+            const center = { lat: officeLat, lng: officeLng };
+
+            // Create map
+            const mapInstance = new google.maps.Map(document.getElementById(mapElementId), {
+                zoom: 14,
+                center: center,
+                mapTypeId: 'roadmap'
+            });
+
+            // Add office marker
+            const officeMarker = new google.maps.Marker({
+                position: center,
+                map: mapInstance,
+                title: 'Fleur Atelier d\'artistes - Lokasi Kantor',
+                icon: {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: 10,
+                    fillColor: '#3b82f6',
+                    fillOpacity: 1,
+                    strokeColor: 'white',
+                    strokeWeight: 3
+                }
+            });
+
+            // Add office info window
+            const officeInfoWindow = new google.maps.InfoWindow({
+                content: '<div class="text-center"><strong>Fleur Atelier d\'artistes</strong><br><small>Lokasi Kantor</small></div>'
+            });
+
+            officeMarker.addListener('click', function() {
+                officeInfoWindow.open(mapInstance, officeMarker);
+            });
+
+            // Add office radius circle
+            const officeCircle = new google.maps.Circle({
+                strokeColor: '#dc2626',
+                strokeOpacity: 0.8,
+                strokeWeight: 2,
+                fillColor: '#fca5a5',
+                fillOpacity: 0.2,
+                map: mapInstance,
+                center: center,
+                radius: officeRadius
+            });
+
+            // Add attendance markers
+            attendanceData.forEach(function(attendance) {
+                const hasValidCoordinate =
+                    Number.isFinite(attendance.lat) &&
+                    Number.isFinite(attendance.lng) &&
+                    !(attendance.lat === 0 && attendance.lng === 0);
+                if (!hasValidCoordinate) {
+                    return;
+                }
+
+                const normalizedStatus = String(attendance.status || '').toLowerCase();
+                const isPresent = ['hadir', 'present', 'late'].includes(normalizedStatus);
+                const markerColor = isPresent ? '#10b981' : '#ef4444';
+                
+                const attendanceMarker = new google.maps.Marker({
+                    position: { lat: attendance.lat, lng: attendance.lng },
+                    map: mapInstance,
+                    title: attendance.nama,
+                    icon: {
+                        path: google.maps.SymbolPath.CIRCLE,
+                        scale: 8,
+                        fillColor: markerColor,
+                        fillOpacity: 1,
+                        strokeColor: 'white',
+                        strokeWeight: 2
+                    }
+                });
+
+                const attendanceInfoWindow = new google.maps.InfoWindow({
+                    content: `
+                        <div class="text-center max-w-xs">
+                            <img src="${attendance.foto}" alt="${attendance.nama}"
+                                 onerror="this.src='/LogoApp.jpeg'; this.onerror=null;"
+                                 class="w-16 h-16 rounded-lg object-cover mx-auto mb-2">
+                            <strong>${attendance.nama}</strong><br>
+                            <small>${attendance.jabatan}</small><br>
+                            <small>${attendance.tanggal} ${attendance.jam_masuk}</small><br>
+                            <span class="inline-block px-2 py-1 text-xs rounded-full ${isPresent ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                                ${attendance.status}
+                            </span><br>
+                            <small>Jarak: ${attendance.jarak}m</small>
+                        </div>
+                    `
+                });
+
+                attendanceMarker.addListener('click', function() {
+                    attendanceInfoWindow.open(mapInstance, attendanceMarker);
+                });
+            });
+
+            // Fit map to show all markers
+            const validPoints = attendanceData.filter(attendance =>
+                Number.isFinite(attendance.lat) &&
+                Number.isFinite(attendance.lng) &&
+                !(attendance.lat === 0 && attendance.lng === 0)
+            );
+
+            if (validPoints.length > 0) {
+                const bounds = new google.maps.LatLngBounds();
+                bounds.extend(center);
+                validPoints.forEach(function(attendance) {
+                    bounds.extend({ lat: attendance.lat, lng: attendance.lng });
+                });
+                mapInstance.fitBounds(bounds);
+            }
+
+            return mapInstance;
+        }
+
+        function initAttendanceMap() {
+            if (attendanceMapInstance) {
+                return;
+            }
+            const mapElement = document.getElementById('attendanceMapTab');
+            if (!mapElement) {
+                return;
+            }
+            attendanceMapInstance = createMapInstance('attendanceMapTab');
+        }
+
+        function initAttendanceMapTab() {
+            if (attendanceMapTabInstance) {
+                return;
+            }
+            attendanceMapTabInstance = createMapInstance('attendanceMapTab');
+        }
+
+        function showImage(src) {
+            document.getElementById('modalImage').src = src;
+            document.getElementById('imageModal').classList.remove('hidden');
+            document.getElementById('imageModal').classList.add('flex');
+        }
+
+        function closeImageModal() {
+            document.getElementById('imageModal').classList.add('hidden');
+            document.getElementById('imageModal').classList.remove('flex');
+        }
+
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            // Tab event listeners are already set up above
+        });
+
+        // Close modal when clicking outside
+        document.getElementById('imageModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeImageModal();
+            }
+        });
+
+        // Handle Google Maps authentication failure
+        function gm_authFailure() {
+            console.error('Google Maps authentication failed');
+            const mapDiv = document.getElementById('attendanceMapTab');
+            if (mapDiv) {
+                mapDiv.innerHTML = '<div class="flex items-center justify-center h-full text-red-600"><i class="fas fa-exclamation-triangle mr-2"></i>Google Maps authentication failed</div>';
+            }
+        }
+
+        // Filter Type Switching
+        function setFilterType(type, button) {
+            document.getElementById('filterType').value = type;
+            
+            // Hide all filter contents
+            document.querySelectorAll('.filter-content').forEach(el => el.classList.add('hidden'));
+            
+            // Show selected filter content
+            if (type === 'date') {
+                document.getElementById('dateFilter').classList.remove('hidden');
+            } else if (type === 'range') {
+                document.getElementById('rangeFilter').classList.remove('hidden');
+            } else if (type === 'month') {
+                document.getElementById('monthFilter').classList.remove('hidden');
+            } else if (type === 'year') {
+                document.getElementById('yearFilter').classList.remove('hidden');
+            }
+            
+            // Update button styles
+            document.querySelectorAll('.filter-type-btn').forEach(btn => {
+                btn.classList.remove('bg-brown-600', 'border-brown-500', 'text-white');
+                btn.classList.add('bg-dark-700', 'border-brown-600/50', 'text-brown-300');
+            });
+            if (button) {
+                button.classList.remove('bg-dark-700', 'border-brown-600/50', 'text-brown-300');
+                button.classList.add('bg-brown-600', 'border-brown-500', 'text-white');
+            }
+        }
+
+        // Export to Excel
+        document.getElementById('btnExport').addEventListener('click', function() {
+            const form = document.getElementById('filterForm');
+            const formData = new FormData(form);
+            const params = new URLSearchParams(formData);
+            window.location.href = '/admin/laporan/export?' + params.toString();
+        });
+    </script>
+</body>
+</html>

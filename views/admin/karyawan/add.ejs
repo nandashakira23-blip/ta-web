@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/css/tailwind.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        /* Custom Dark Theme Styles */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #212529;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #a67c52;
+            border-radius: 4px;
+            border: 1px solid #343a40;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #b8956b;
+        }
+        .solid-background {
+            background: #1a1d20;
+        }
+        .glow-brown {
+            box-shadow: 0 2px 8px rgba(166, 124, 82, 0.2);
+        }
+        .glow-brown:hover {
+            box-shadow: 0 4px 12px rgba(166, 124, 82, 0.3);
+        }
+        .card-hover {
+            transition: all 0.2s ease;
+        }
+        .card-hover:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        .text-glow {
+            text-shadow: 0 0 8px rgba(166, 124, 82, 0.3);
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .glass-effect {
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            background: rgba(33, 37, 41, 0.8);
+            border: 1px solid rgba(166, 124, 82, 0.3);
+        }
+    </style>
+</head>
+<body class="bg-dark-900 min-h-screen solid-background">
+    <%- include('../../partials/navbar') %>
+
+    <!-- Content with proper spacing for fixed navbar -->
+    <div class="pt-16 sm:pt-20 lg:pt-20">
+        <!-- Mobile menu spacing -->
+        <div class="lg:hidden pt-16 sm:pt-20"></div>
+        
+        <!-- Sidebar & Content -->
+        <div class="flex flex-col lg:flex-row">
+            <%- include('../../partials/sidebar', { currentPage: 'karyawan' }) %>
+
+            <!-- Main Content with sidebar spacing -->
+            <div class="flex-1 lg:ml-64 p-4 sm:p-6 lg:p-8 min-h-screen">
+                <div class="mb-6 sm:mb-8">
+                    <div class="flex items-center mb-2">
+                        <a href="/admin/karyawan" class="text-brown-400 hover:text-brown-300 mr-4 transition-colors duration-200">
+                            <i class="fas fa-arrow-left text-lg sm:text-xl"></i>
+                        </a>
+                        <div class="flex items-center space-x-3">
+                            <div class="w-8 h-8 flex items-center justify-center">
+                                <i class="fas fa-user-plus text-brown-400 text-xl"></i>
+                            </div>
+                            <h2 class="text-2xl sm:text-3xl font-bold text-white text-glow">Tambah Karyawan</h2>
+                        </div>
+                    </div>
+                    <p class="text-brown-300 text-sm sm:text-base ml-12">Tambah karyawan baru ke sistem presensi</p>
+                </div>
+
+                <!-- Flash Messages -->
+                <% if (error && error.length > 0) { %>
+                    <div class="bg-red-900/80 border border-red-600/50 text-red-200 px-4 py-3 rounded-lg mb-4 shadow-lg backdrop-blur-sm fade-in">
+                        <i class="fas fa-exclamation-circle mr-2"></i><%= error %>
+                    </div>
+                <% } %>
+
+                <!-- Form -->
+                <div class="bg-dark-800 rounded-xl shadow-2xl p-6 sm:p-8 border border-brown-600/30 card-hover glow-brown fade-in">
+                    <form method="POST" action="/admin/karyawan/add" enctype="multipart/form-data" class="space-y-6">
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div>
+                                <label for="nik" class="block text-sm font-semibold text-brown-300 mb-2">
+                                    <i class="fas fa-id-card mr-2"></i>NIK *
+                                </label>
+                                <input type="text" id="nik" name="nik" required
+                                       pattern="[0-9]{16}" maxlength="16"
+                                       class="w-full px-4 py-3 bg-dark-700 border border-brown-600/50 rounded-lg focus:ring-2 focus:ring-brown-500 focus:border-brown-400 transition duration-200 text-white placeholder-brown-400"
+                                       placeholder="16 digit angka"
+                                       oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 16)">
+                            </div>
+
+                            <div>
+                                <label for="nama" class="block text-sm font-semibold text-brown-300 mb-2">
+                                    <i class="fas fa-user mr-2"></i>Nama Lengkap *
+                                </label>
+                                <input type="text" id="nama" name="nama" required
+                                       class="w-full px-4 py-3 bg-dark-700 border border-brown-600/50 rounded-lg focus:ring-2 focus:ring-brown-500 focus:border-brown-400 transition duration-200 text-white placeholder-brown-400"
+                                       placeholder="Nama lengkap karyawan">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div>
+                                <label for="email" class="block text-sm font-semibold text-brown-300 mb-2">
+                                    <i class="fas fa-envelope mr-2"></i>Email Karyawan
+                                </label>
+                                <input type="email" id="email" name="email"
+                                       class="w-full px-4 py-3 bg-dark-700 border border-brown-600/50 rounded-lg focus:ring-2 focus:ring-brown-500 focus:border-brown-400 transition duration-200 text-white placeholder-brown-400"
+                                       placeholder="email@contoh.com">
+                            </div>
+                            <div>
+                                <label for="phone" class="block text-sm font-semibold text-brown-300 mb-2">
+                                    <i class="fas fa-phone mr-2"></i>No. HP
+                                </label>
+                                <input type="text" id="phone" name="phone"
+                                       class="w-full px-4 py-3 bg-dark-700 border border-brown-600/50 rounded-lg focus:ring-2 focus:ring-brown-500 focus:border-brown-400 transition duration-200 text-white placeholder-brown-400"
+                                       placeholder="08xxxxxxxxxx">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div>
+                                <div class="flex items-center justify-between mb-2">
+                                    <label for="id_jabatan" class="block text-sm font-semibold text-brown-300">
+                                        <i class="fas fa-briefcase mr-2"></i>Jabatan *
+                                    </label>
+                                    <button type="button" id="addJabatanBtn" class="text-brown-400 hover:text-brown-300 text-sm transition-colors duration-200">
+                                        <i class="fas fa-plus mr-1"></i>Tambah Jabatan Baru
+                                    </button>
+                                </div>
+                                
+                                <!-- Jabatan Select -->
+                                <select id="id_jabatan" name="id_jabatan" required
+                                        class="w-full px-4 py-3 bg-dark-700 border border-brown-600/50 rounded-lg focus:ring-2 focus:ring-brown-500 focus:border-brown-400 transition duration-200 text-white">
+                                    <option value="">Pilih Jabatan</option>
+                                    <% jabatan.forEach(function(j) { %>
+                                        <option value="<%= j.id %>"><%= j.nama_jabatan %></option>
+                                    <% }); %>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label for="id_jadwal_kerja" class="block text-sm font-semibold text-brown-300 mb-2">
+                                    <i class="fas fa-clock mr-2"></i>Jadwal Kerja / Shift *
+                                </label>
+                                <select id="id_jadwal_kerja" name="id_jadwal_kerja" required
+                                        class="w-full px-4 py-3 bg-dark-700 border border-brown-600/50 rounded-lg focus:ring-2 focus:ring-brown-500 focus:border-brown-400 transition duration-200 text-white">
+                                    <option value="">Pilih Jadwal Kerja</option>
+                                    <% schedules.forEach(function(s) { %>
+                                        <option value="<%= s.id %>"><%= s.nama %> (<%= s.jam_masuk.substring(0,5) %> - <%= s.jam_keluar.substring(0,5) %>)</option>
+                                    <% }); %>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 gap-6">
+                            <div class="flex items-center">
+                                <label class="inline-flex items-center gap-3 text-brown-200">
+                                    <input type="checkbox" id="can_approve_leave" name="can_approve_leave" value="1"
+                                           class="h-5 w-5 rounded border-brown-600/50 bg-dark-700 text-brown-600 focus:ring-brown-500">
+                                    <span>Dapat menjadi approver izin/sakit</span>
+                                </label>
+                            </div>
+                        </div>
+
+                            <!-- Inline Add Jabatan Form -->
+                            <div id="addJabatanForm" class="hidden mt-3 p-4 bg-dark-700/50 rounded-lg border border-brown-600/30">
+                                <h4 class="font-semibold text-white mb-3">Tambah Jabatan Baru</h4>
+                                <div class="space-y-3">
+                                    <div>
+                                        <label class="block text-sm font-medium text-brown-300 mb-1">Nama Jabatan *</label>
+                                        <input type="text" id="newJabatanNama" placeholder="Contoh: Supervisor"
+                                               class="w-full px-3 py-2 bg-dark-600 border border-brown-600/50 rounded-md focus:ring-2 focus:ring-brown-500 focus:border-brown-400 text-white placeholder-brown-400">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-brown-300 mb-1">Deskripsi</label>
+                                        <input type="text" id="newJabatanDesc" placeholder="Deskripsi jabatan (opsional)"
+                                               class="w-full px-3 py-2 bg-dark-600 border border-brown-600/50 rounded-md focus:ring-2 focus:ring-brown-500 focus:border-brown-400 text-white placeholder-brown-400">
+                                    </div>
+                                    <div class="flex space-x-2">
+                                        <button type="button" id="saveJabatanBtn" class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-md text-sm transition-colors duration-200">
+                                            <i class="fas fa-save mr-1"></i>Simpan
+                                        </button>
+                                        <button type="button" id="cancelJabatanBtn" class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-2 rounded-md text-sm transition-colors duration-200">
+                                            <i class="fas fa-times mr-1"></i>Batal
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Manage Existing Jabatan -->
+                            <div class="mt-3">
+                                <button type="button" id="manageJabatanBtn" class="text-blue-400 hover:text-blue-300 text-sm transition-colors duration-200">
+                                    <i class="fas fa-cog mr-1"></i>Kelola Jabatan yang Ada
+                                </button>
+                            </div>
+
+                            <!-- Jabatan Management Modal -->
+                            <div id="jabatanModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+                                <div class="bg-dark-800 rounded-lg max-w-2xl w-full max-h-96 overflow-hidden border border-brown-600/30">
+                                    <div class="p-4 border-b border-brown-600/30">
+                                        <div class="flex justify-between items-center">
+                                            <h3 class="text-lg font-bold text-white">Kelola Jabatan</h3>
+                                            <button type="button" id="closeJabatanModal" class="text-brown-400 hover:text-brown-300">
+                                                <i class="fas fa-times text-xl"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="p-4 overflow-y-auto max-h-80">
+                                        <div id="jabatanList" class="space-y-2">
+                                            <!-- Jabatan list will be loaded here -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Edit Jabatan Modal -->
+                            <div id="editJabatanModal" class="hidden fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm z-50 items-center justify-center p-4">
+                                <div class="bg-dark-800 rounded-2xl max-w-md w-full overflow-hidden border border-brown-600/40 shadow-2xl">
+                                    <div class="p-5 border-b border-brown-600/30 flex justify-between items-center">
+                                        <h3 class="text-lg font-bold text-white"><i class="fas fa-edit mr-2 text-brown-300"></i>Edit Jabatan</h3>
+                                        <button type="button" id="closeEditJabatanModal" class="text-brown-400 hover:text-white p-1 rounded"><i class="fas fa-times text-lg"></i></button>
+                                    </div>
+                                    <div class="p-5 space-y-4">
+                                        <input type="hidden" id="editJabatanId">
+                                        <div>
+                                            <label class="block text-sm font-medium text-brown-300 mb-1">Nama Jabatan *</label>
+                                            <input type="text" id="editJabatanNama" class="w-full px-3 py-2 bg-dark-700 border border-brown-600/50 rounded-md focus:ring-2 focus:ring-brown-500 focus:border-brown-400 text-white">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-brown-300 mb-1">Deskripsi</label>
+                                            <input type="text" id="editJabatanDesc" class="w-full px-3 py-2 bg-dark-700 border border-brown-600/50 rounded-md focus:ring-2 focus:ring-brown-500 focus:border-brown-400 text-white" placeholder="Opsional">
+                                        </div>
+                                    </div>
+                                    <div class="bg-dark-900/60 px-5 py-4 flex justify-end gap-3">
+                                        <button type="button" id="cancelEditJabatanBtn" class="px-4 py-2 rounded-lg text-brown-200 hover:text-white hover:bg-dark-600 transition font-medium">Batal</button>
+                                        <button type="button" id="saveEditJabatanBtn" class="px-4 py-2 rounded-lg bg-brown-600 hover:bg-brown-500 text-white transition font-semibold shadow-lg"><i class="fas fa-save mr-2"></i>Simpan Perubahan</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="foto_referensi" class="block text-sm font-semibold text-brown-300 mb-2">
+                                <i class="fas fa-camera mr-2"></i>Foto Referensi
+                            </label>
+                            <input type="file" id="foto_referensi" name="foto_referensi" accept="image/*"
+                                   class="w-full px-4 py-3 bg-dark-700 border border-brown-600/50 rounded-lg focus:ring-2 focus:ring-brown-500 focus:border-brown-400 transition duration-200 text-white file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-brown-600 file:text-white hover:file:bg-brown-700">
+                            <p class="text-sm text-brown-400 mt-2">Upload foto untuk referensi face recognition (opsional)</p>
+                        </div>
+
+                        <div class="flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-4 pt-4">
+                            <a href="/admin/karyawan" 
+                               class="px-6 py-3 border border-brown-600/50 text-brown-300 rounded-lg hover:bg-brown-800/30 transition duration-200 text-center">
+                                Batal
+                            </a>
+                            <button type="submit" 
+                                    class="px-6 py-3 bg-brown-600 hover:bg-brown-500 text-white rounded-lg transition duration-200 shadow-lg hover:shadow-brown-500/30">
+                                <i class="fas fa-save mr-2"></i>Simpan
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Jabatan Management
+        const addJabatanBtn = document.getElementById('addJabatanBtn');
+        const addJabatanForm = document.getElementById('addJabatanForm');
+        const saveJabatanBtn = document.getElementById('saveJabatanBtn');
+        const cancelJabatanBtn = document.getElementById('cancelJabatanBtn');
+        const manageJabatanBtn = document.getElementById('manageJabatanBtn');
+        const jabatanModal = document.getElementById('jabatanModal');
+        const closeJabatanModal = document.getElementById('closeJabatanModal');
+        const jabatanSelect = document.getElementById('id_jabatan');
+
+        // Show add jabatan form
+        addJabatanBtn.addEventListener('click', function() {
+            addJabatanForm.classList.toggle('hidden');
+            if (!addJabatanForm.classList.contains('hidden')) {
+                document.getElementById('newJabatanNama').focus();
+            }
+        });
+
+        // Cancel add jabatan
+        cancelJabatanBtn.addEventListener('click', function() {
+            addJabatanForm.classList.add('hidden');
+            document.getElementById('newJabatanNama').value = '';
+            document.getElementById('newJabatanDesc').value = '';
+        });
+
+        // Save new jabatan
+        saveJabatanBtn.addEventListener('click', async function() {
+            const nama = document.getElementById('newJabatanNama').value.trim();
+            const deskripsi = document.getElementById('newJabatanDesc').value.trim();
+
+            if (!nama) {
+                Notify.warning('Nama jabatan harus diisi!');
+                return;
+            }
+
+            try {
+                const response = await fetch('/admin/jabatan/add', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ nama_jabatan: nama, deskripsi: deskripsi })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // Add new option to select
+                    const option = document.createElement('option');
+                    option.value = result.data.id;
+                    option.textContent = result.data.nama_jabatan;
+                    jabatanSelect.appendChild(option);
+
+                    // Select the new option
+                    jabatanSelect.value = result.data.id;
+
+                    // Hide form and clear inputs
+                    addJabatanForm.classList.add('hidden');
+                    document.getElementById('newJabatanNama').value = '';
+                    document.getElementById('newJabatanDesc').value = '';
+
+                    Notify.success('Jabatan berhasil ditambahkan!');
+                } else {
+                    Notify.error(result.message || 'Gagal menambahkan jabatan');
+                }
+            } catch (error) {
+                Notify.error('Terjadi kesalahan: ' + error.message);
+            }
+        });
+
+        // Show manage jabatan modal
+        manageJabatanBtn.addEventListener('click', async function() {
+            await loadJabatanList();
+            jabatanModal.classList.remove('hidden');
+        });
+
+        // Close modal
+        closeJabatanModal.addEventListener('click', function() {
+            jabatanModal.classList.add('hidden');
+        });
+
+        // Close modal when clicking outside
+        jabatanModal.addEventListener('click', function(e) {
+            if (e.target === jabatanModal) {
+                jabatanModal.classList.add('hidden');
+            }
+        });
+
+        // Load jabatan list for management
+        async function loadJabatanList() {
+            try {
+                const response = await fetch('/admin/jabatan/list', {
+                    headers: {
+                        'Accept': 'application/json'
+                    },
+                    credentials: 'same-origin'
+                });
+
+                const contentType = response.headers.get('content-type') || '';
+                if (!contentType.includes('application/json')) {
+                    throw new Error('Server mengembalikan HTML. Silakan login ulang lalu coba lagi.');
+                }
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.message || `HTTP ${response.status}`);
+                }
+
+                if (result.success) {
+                    const jabatanList = document.getElementById('jabatanList');
+                    jabatanList.innerHTML = '';
+
+                    result.data.forEach(jabatan => {
+                        const jabatanItem = document.createElement('div');
+                        jabatanItem.className = 'flex items-center justify-between p-3 bg-dark-700/50 rounded-lg border border-brown-600/30';
+                        jabatanItem.innerHTML = `
+                            <div>
+                                <div class="font-medium text-white">${jabatan.nama_jabatan}</div>
+                                <div class="text-sm text-brown-300">${jabatan.deskripsi || 'Tidak ada deskripsi'}</div>
+                            </div>
+                            <div class="flex space-x-2">
+                                <button onclick="editJabatan(${jabatan.id}, '${jabatan.nama_jabatan}', '${jabatan.deskripsi || ''}')" 
+                                        class="text-blue-400 hover:text-blue-300 text-sm transition-colors duration-200">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button onclick="deleteJabatan(${jabatan.id}, '${jabatan.nama_jabatan}')" 
+                                        class="text-red-400 hover:text-red-300 text-sm transition-colors duration-200">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        `;
+                        jabatanList.appendChild(jabatanItem);
+                    });
+                } else {
+                    throw new Error(result.message || 'Gagal memuat data jabatan');
+                }
+            } catch (error) {
+                Notify.error('Gagal memuat data jabatan: ' + error.message);
+            }
+        }
+
+        // Edit jabatan — open custom modal (replaces native prompt)
+        const editJabatanModal = document.getElementById('editJabatanModal');
+        const editJabatanIdEl = document.getElementById('editJabatanId');
+        const editJabatanNamaEl = document.getElementById('editJabatanNama');
+        const editJabatanDescEl = document.getElementById('editJabatanDesc');
+        const saveEditJabatanBtn = document.getElementById('saveEditJabatanBtn');
+        const cancelEditJabatanBtn = document.getElementById('cancelEditJabatanBtn');
+        const closeEditJabatanModal = document.getElementById('closeEditJabatanModal');
+
+        function openEditJabatanModal(id, nama, deskripsi) {
+            editJabatanIdEl.value = id;
+            editJabatanNamaEl.value = nama || '';
+            editJabatanDescEl.value = deskripsi || '';
+            editJabatanModal.classList.remove('hidden');
+            editJabatanModal.classList.add('flex');
+            setTimeout(() => editJabatanNamaEl.focus(), 50);
+        }
+        function closeEditJabatan() {
+            editJabatanModal.classList.add('hidden');
+            editJabatanModal.classList.remove('flex');
+        }
+
+        cancelEditJabatanBtn.addEventListener('click', closeEditJabatan);
+        closeEditJabatanModal.addEventListener('click', closeEditJabatan);
+        editJabatanModal.addEventListener('click', function (event) {
+            if (event.target === editJabatanModal) closeEditJabatan();
+        });
+
+        saveEditJabatanBtn.addEventListener('click', async function () {
+            const id = editJabatanIdEl.value;
+            const nama = editJabatanNamaEl.value.trim();
+            const deskripsi = editJabatanDescEl.value.trim();
+            if (!nama) {
+                Notify.warning('Nama jabatan harus diisi!');
+                return;
+            }
+            await updateJabatan(id, nama, deskripsi);
+            closeEditJabatan();
+        });
+
+        window.editJabatan = function(id, nama, deskripsi) {
+            openEditJabatanModal(id, nama, deskripsi);
+        };
+
+        // Update jabatan
+        async function updateJabatan(id, nama, deskripsi) {
+            try {
+                const response = await fetch('/admin/jabatan/update', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ id: id, nama_jabatan: nama, deskripsi: deskripsi })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // Update select option
+                    const option = jabatanSelect.querySelector(`option[value="${id}"]`);
+                    if (option) {
+                        option.textContent = nama;
+                    }
+
+                    // Reload list
+                    await loadJabatanList();
+                    Notify.success('Jabatan berhasil diupdate!');
+                } else {
+                    Notify.error(result.message || 'Gagal memperbarui jabatan');
+                }
+            } catch (error) {
+                Notify.error('Terjadi kesalahan: ' + error.message);
+            }
+        }
+
+        // Delete jabatan
+        window.deleteJabatan = async function(id, nama) {
+            const ok = await Notify.confirm({
+                title: `Hapus jabatan "${nama}"?`,
+                message: 'Pastikan tidak ada karyawan yang menggunakan jabatan ini. Tindakan ini tidak bisa dibatalkan.',
+                okText: 'Ya, Hapus',
+                cancelText: 'Batal',
+                variant: 'danger',
+                icon: 'danger'
+            });
+            if (!ok) return;
+
+            try {
+                const response = await fetch('/admin/jabatan/delete', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ id: id })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // Remove from select
+                    const option = jabatanSelect.querySelector(`option[value="${id}"]`);
+                    if (option) {
+                        option.remove();
+                    }
+
+                    // Reload list
+                    await loadJabatanList();
+                    Notify.success('Jabatan berhasil dihapus!');
+                } else {
+                    Notify.error(result.message || 'Gagal menghapus jabatan');
+                }
+            } catch (error) {
+                Notify.error('Terjadi kesalahan: ' + error.message);
+            }
+        };
+
+        // Real-time Clock - Consistent format (date and time only)
+        function updateClock() {
+            try {
+                const now = new Date();
+                const options = {
+                    day: '2-digit',
+                    month: '2-digit', 
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    timeZone: 'Asia/Makassar' // WITA timezone
+                };
+                
+                const timeString = now.toLocaleString('id-ID', options);
+                const clockElement = document.getElementById('currentTime');
+                
+                if (clockElement) {
+                    clockElement.textContent = timeString;
+                }
+            } catch (error) {
+                console.error('Clock update error:', error);
+                const clockElement = document.getElementById('currentTime');
+                if (clockElement) {
+                    const now = new Date();
+                    const day = String(now.getDate()).padStart(2, '0');
+                    const month = String(now.getMonth() + 1).padStart(2, '0');
+                    const year = now.getFullYear();
+                    const hours = String(now.getHours()).padStart(2, '0');
+                    const minutes = String(now.getMinutes()).padStart(2, '0');
+                    const seconds = String(now.getSeconds()).padStart(2, '0');
+                    clockElement.textContent = `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+                }
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded, initializing clock...');
+            const clockElement = document.getElementById('currentTime');
+            
+            if (clockElement) {
+                console.log('Clock element found, starting updates...');
+                updateClock();
+                setInterval(updateClock, 1000);
+            } else {
+                console.log('Clock element not found on page load');
+                // Try again after a short delay
+                setTimeout(function() {
+                    const clockElement = document.getElementById('currentTime');
+                    
+                    if (clockElement) {
+                        console.log('Clock element found after delay, starting updates...');
+                        updateClock();
+                        setInterval(updateClock, 1000);
+                    }
+                }, 500);
+            }
+        });
+    </script>
+
+    <%- include('../../partials/notify') %>
+</body>
+</html>

@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/css/tailwind.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #212529;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #a67c52;
+            border-radius: 4px;
+            border: 1px solid #343a40;
+        }
+        .solid-background {
+            background: #1a1d20;
+        }
+        .glow-brown {
+            box-shadow: 0 2px 8px rgba(166, 124, 82, 0.2);
+        }
+        .text-glow {
+            text-shadow: 0 0 8px rgba(166, 124, 82, 0.3);
+        }
+        .fade-in {
+            animation: fadeIn 0.35s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-dark-900 min-h-screen solid-background">
+    <%- include('../partials/navbar') %>
+
+    <div class="pt-16 sm:pt-20 lg:pt-20">
+        <div class="lg:hidden pt-16 sm:pt-20"></div>
+
+        <div class="flex flex-col lg:flex-row">
+            <%- include('../partials/sidebar', { currentPage: 'setting' }) %>
+
+            <div class="flex-1 lg:ml-64 p-4 sm:p-6 lg:p-8 min-h-screen">
+                <div class="mb-6 sm:mb-8 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                        <div class="flex items-center space-x-3 mb-2">
+                            <div class="w-8 h-8 flex items-center justify-center">
+                                <i class="fas fa-database text-brown-400 text-xl"></i>
+                            </div>
+                            <h2 class="text-2xl sm:text-3xl font-bold text-white text-glow">Database & File Upload</h2>
+                        </div>
+                        <p class="text-brown-300 text-sm sm:text-base">
+                            Lihat dan hapus file fisik yang tersimpan di folder upload sistem.
+                        </p>
+                    </div>
+                    <a href="/admin/setting"
+                       class="inline-flex items-center justify-center bg-dark-700 hover:bg-dark-600 text-brown-100 border border-brown-600/40 font-semibold py-3 px-4 rounded-lg transition-colors duration-200">
+                        <i class="fas fa-arrow-left mr-2"></i>
+                        Kembali ke Setting
+                    </a>
+                </div>
+
+                <% if (success && success.length > 0) { %>
+                    <div class="bg-green-900/80 border border-green-600/50 text-green-200 px-4 py-3 rounded-lg mb-4 shadow-lg fade-in">
+                        <i class="fas fa-check-circle mr-2"></i><%= success %>
+                    </div>
+                <% } %>
+
+                <% if (error && error.length > 0) { %>
+                    <div class="bg-red-900/80 border border-red-600/50 text-red-200 px-4 py-3 rounded-lg mb-4 shadow-lg fade-in">
+                        <i class="fas fa-exclamation-circle mr-2"></i><%= error %>
+                    </div>
+                <% } %>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div class="bg-dark-800 rounded-xl border border-brown-600/30 p-5 shadow-xl glow-brown">
+                        <div class="text-brown-300 text-sm font-semibold mb-2">Total File</div>
+                        <div class="text-3xl font-bold text-white"><%= stats.totalFiles %></div>
+                    </div>
+                    <div class="bg-dark-800 rounded-xl border border-brown-600/30 p-5 shadow-xl glow-brown">
+                        <div class="text-brown-300 text-sm font-semibold mb-2">Total Ukuran</div>
+                        <div class="text-3xl font-bold text-white"><%= stats.totalSizeLabel %></div>
+                    </div>
+                    <div class="bg-dark-800 rounded-xl border border-brown-600/30 p-5 shadow-xl glow-brown">
+                        <div class="text-brown-300 text-sm font-semibold mb-2">Folder Dipantau</div>
+                        <div class="text-3xl font-bold text-white"><%= stats.byBucket.length %></div>
+                    </div>
+                </div>
+
+                <div class="bg-amber-900/25 border border-amber-600/40 text-amber-100 rounded-xl p-4 mb-6">
+                    <div class="flex items-start gap-3">
+                        <i class="fas fa-triangle-exclamation text-amber-300 mt-1"></i>
+                        <div class="text-sm leading-relaxed">
+                            Ini hanya menghapus file fisik/Blob dari storage upload, tanpa mengubah isi database. Kalau file masih direferensikan data lama, gambar atau lampiran tersebut bisa tampil kosong setelah dihapus.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+                    <div class="lg:col-span-2 bg-dark-800 rounded-xl border border-brown-600/30 p-5 shadow-xl glow-brown">
+                        <h3 class="text-lg font-bold text-white mb-4 flex items-center">
+                            <i class="fas fa-folder-open text-brown-400 mr-2"></i>
+                            Ringkasan Folder
+                        </h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <% stats.byBucket.forEach(folder => { %>
+                                <div class="bg-dark-700/70 rounded-lg border border-brown-700/30 p-4">
+                                    <div class="flex items-center justify-between gap-3">
+                                        <div>
+                                            <div class="text-white font-semibold"><%= folder.label %></div>
+                                            <div class="text-brown-300 text-sm"><%= folder.sizeLabel %></div>
+                                        </div>
+                                        <div class="text-right">
+                                            <div class="text-2xl font-bold text-brown-200"><%= folder.count %></div>
+                                            <div class="text-xs text-brown-400">file</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            <% }) %>
+                        </div>
+                    </div>
+
+                    <div class="bg-dark-800 rounded-xl border border-red-700/40 p-5 shadow-xl">
+                        <h3 class="text-lg font-bold text-white mb-3 flex items-center">
+                            <i class="fas fa-trash text-red-400 mr-2"></i>
+                            Aksi Hapus
+                        </h3>
+                        <p class="text-brown-300 text-sm mb-4">
+                            Gunakan checkbox untuk hapus beberapa file, atau hapus semua file upload sekaligus.
+                        </p>
+                        <form id="delete-selected-form" method="POST" action="/admin/setting/database/delete-selected" class="js-confirm-form" data-confirm-type="selected"></form>
+                        <form id="delete-all-form" method="POST" action="/admin/setting/database/delete-all" class="js-confirm-form" data-confirm-type="all"></form>
+                        <div class="space-y-3">
+                            <button type="submit"
+                                    form="delete-selected-form"
+                                    class="w-full bg-red-700 hover:bg-red-600 disabled:bg-dark-600 disabled:text-brown-400 text-white font-semibold py-3 px-4 rounded-lg transition-colors duration-200"
+                                    <%= files.length === 0 ? 'disabled' : '' %>>
+                                <i class="fas fa-check-square mr-2"></i>
+                                Hapus Terpilih <span id="selected-count-label"></span>
+                            </button>
+                            <button type="submit"
+                                    form="delete-all-form"
+                                    class="w-full bg-red-900 hover:bg-red-800 disabled:bg-dark-600 disabled:text-brown-400 text-white font-semibold py-3 px-4 rounded-lg transition-colors duration-200"
+                                    <%= files.length === 0 ? 'disabled' : '' %>>
+                                <i class="fas fa-trash-alt mr-2"></i>
+                                Hapus Semua File
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-dark-800 rounded-xl shadow-2xl border border-brown-600/30 overflow-hidden glow-brown fade-in">
+                    <div class="p-5 border-b border-brown-700/40 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <h3 class="text-xl font-bold text-white flex items-center">
+                            <i class="fas fa-images text-brown-400 mr-3"></i>
+                            Daftar File Upload
+                        </h3>
+                        <% if (files.length > 0) { %>
+                            <label class="inline-flex items-center gap-2 text-brown-200 text-sm cursor-pointer">
+                                <input id="select-all-files" type="checkbox" class="w-4 h-4 accent-brown-600" onchange="toggleAllFiles(this)">
+                                Pilih semua
+                            </label>
+                        <% } %>
+                    </div>
+
+                    <% if (files.length === 0) { %>
+                        <div class="p-10 text-center">
+                            <i class="fas fa-folder-open text-5xl text-brown-500 mb-4"></i>
+                            <div class="text-white font-semibold text-lg mb-1">Belum ada file upload</div>
+                            <div class="text-brown-300 text-sm">Folder upload kosong atau hanya berisi file .gitkeep.</div>
+                        </div>
+                    <% } else { %>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead class="bg-dark-700 text-brown-200 uppercase text-xs tracking-wide">
+                                    <tr>
+                                        <th class="px-4 py-3 text-left w-12"></th>
+                                        <th class="px-4 py-3 text-left">File</th>
+                                        <th class="px-4 py-3 text-left">Folder</th>
+                                        <th class="px-4 py-3 text-left">Ukuran</th>
+                                        <th class="px-4 py-3 text-left">Diubah</th>
+                                        <th class="px-4 py-3 text-right">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-brown-900/60">
+                                    <% files.forEach(file => { %>
+                                        <tr class="hover:bg-dark-700/50 transition-colors duration-150">
+                                            <td class="px-4 py-4 align-top">
+                                                <input type="checkbox"
+                                                       form="delete-selected-form"
+                                                       name="fileIds"
+                                                       value="<%= file.id %>"
+                                                       class="file-checkbox w-4 h-4 accent-brown-600"
+                                                       onchange="updateSelectedCount()">
+                                            </td>
+                                            <td class="px-4 py-4">
+                                                <div class="flex items-start gap-3 min-w-[280px]">
+                                                    <div class="w-14 h-14 rounded-lg bg-dark-700 border border-brown-700/40 flex items-center justify-center overflow-hidden shrink-0">
+                                                        <% if (file.isImage) { %>
+                                                            <img src="<%= file.publicPath %>"
+                                                                 alt="<%= file.name %>"
+                                                                 class="w-full h-full object-cover"
+                                                                 loading="lazy"
+                                                                 onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')">
+                                                            <i class="fas fa-file-image text-brown-300 text-xl hidden"></i>
+                                                        <% } else { %>
+                                                            <i class="fas fa-file text-brown-300 text-xl"></i>
+                                                        <% } %>
+                                                    </div>
+                                                    <div class="min-w-0">
+                                                        <div class="text-white font-semibold break-all"><%= file.name %></div>
+                                                        <div class="text-brown-400 text-xs mt-1 break-all"><%= file.publicPath %></div>
+                                                        <div class="mt-2 flex flex-wrap gap-2">
+                                                            <span class="inline-flex items-center px-2 py-1 rounded bg-dark-700 text-brown-200 text-xs border border-brown-700/40">
+                                                                <%= file.kind %>
+                                                            </span>
+                                                            <a href="<%= file.publicPath %>"
+                                                               target="_blank"
+                                                               class="inline-flex items-center px-2 py-1 rounded bg-blue-900/40 text-blue-200 text-xs border border-blue-700/40 hover:bg-blue-800/60">
+                                                                <i class="fas fa-external-link-alt mr-1"></i>
+                                                                Buka
+                                                            </a>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td class="px-4 py-4 text-brown-200"><%= file.bucketLabel %></td>
+                                            <td class="px-4 py-4 text-brown-200 whitespace-nowrap"><%= file.sizeLabel %></td>
+                                            <td class="px-4 py-4 text-brown-200 whitespace-nowrap"><%= file.modifiedAtLabel %></td>
+                                            <td class="px-4 py-4 text-right">
+                                                <form method="POST" action="/admin/setting/database/delete-file" data-file-name="<%= file.name %>" class="js-confirm-form" data-confirm-type="one">
+                                                    <input type="hidden" name="fileId" value="<%= file.id %>">
+                                                    <button type="submit"
+                                                            class="inline-flex items-center justify-center bg-red-700 hover:bg-red-600 text-white font-semibold py-2 px-3 rounded-lg transition-colors duration-200">
+                                                        <i class="fas fa-trash mr-2"></i>
+                                                        Hapus
+                                                    </button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                    <% }) %>
+                                </tbody>
+                            </table>
+                        </div>
+                    <% } %>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function getSelectedFileCount() {
+            return document.querySelectorAll('.file-checkbox:checked').length;
+        }
+
+        function updateSelectedCount() {
+            const selectedCount = getSelectedFileCount();
+            const label = document.getElementById('selected-count-label');
+            const selectAll = document.getElementById('select-all-files');
+            if (label) {
+                label.textContent = selectedCount > 0 ? `(${selectedCount})` : '';
+            }
+            if (selectAll) {
+                const checkboxes = document.querySelectorAll('.file-checkbox');
+                selectAll.checked = checkboxes.length > 0 && selectedCount === checkboxes.length;
+                selectAll.indeterminate = selectedCount > 0 && selectedCount < checkboxes.length;
+            }
+        }
+
+        function toggleAllFiles(source) {
+            document.querySelectorAll('.file-checkbox').forEach(checkbox => {
+                checkbox.checked = source.checked;
+            });
+            updateSelectedCount();
+        }
+
+        function getConfirmConfig(form) {
+            const type = form.dataset.confirmType;
+            if (type === 'selected') {
+                const selectedCount = getSelectedFileCount();
+                if (selectedCount === 0) {
+                    Notify.warning('Pilih minimal satu file dulu.');
+                    return null;
+                }
+                return { title: 'Hapus file terpilih?', message: `${selectedCount} file akan dihapus. Tindakan ini tidak bisa dibatalkan.` };
+            }
+            if (type === 'all') {
+                return { title: 'Hapus SEMUA file upload?', message: 'Semua file yang tampil di halaman ini akan dihapus. Tindakan ini tidak bisa dibatalkan.' };
+            }
+            return { title: 'Hapus file?', message: `Hapus file "${form.dataset.fileName || 'ini'}". Tindakan ini tidak bisa dibatalkan.` };
+        }
+
+        document.addEventListener('submit', async function (event) {
+            const form = event.target.closest('form.js-confirm-form');
+            if (!form) return;
+            event.preventDefault();
+            const cfg = getConfirmConfig(form);
+            if (!cfg) return;
+            const ok = await Notify.confirm({
+                title: cfg.title,
+                message: cfg.message,
+                okText: 'Ya, Hapus',
+                cancelText: 'Batal',
+                variant: 'danger',
+                icon: 'danger'
+            });
+            if (ok) form.submit();
+        });
+
+        updateSelectedCount();
+    </script>
+
+    <%- include('../partials/notify') %>
+</body>
+</html>

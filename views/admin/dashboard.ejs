@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/css/tailwind.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* Custom Dark Theme Styles */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #212529;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #a67c52;
+            border-radius: 4px;
+            border: 1px solid #343a40;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #b8956b;
+        }
+        .solid-background {
+            background: #1a1d20;
+        }
+        .glow-brown {
+            box-shadow: 0 0 20px rgba(166, 124, 82, 0.3);
+        }
+        .glow-brown:hover {
+            box-shadow: 0 0 30px rgba(166, 124, 82, 0.5);
+        }
+        .card-hover {
+            transition: all 0.2s ease;
+        }
+        .card-hover:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        .text-glow {
+            text-shadow: 0 0 8px rgba(166, 124, 82, 0.3);
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .glass-effect {
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            background: rgba(33, 37, 41, 0.8);
+            border: 1px solid rgba(166, 124, 82, 0.3);
+        }
+    </style>
+</head>
+<body class="bg-dark-900 min-h-screen solid-background">
+    <%- include('../partials/navbar') %>
+
+    <!-- Content with proper spacing for fixed navbar -->
+    <div class="pt-16 sm:pt-20 lg:pt-20">
+        <!-- Mobile menu spacing -->
+        <div class="lg:hidden pt-16 sm:pt-20"></div>
+        
+        <!-- Sidebar & Content -->
+        <div class="flex flex-col lg:flex-row">
+            <%- include('../partials/sidebar', { currentPage: 'dashboard' }) %>
+
+            <!-- Main Content with sidebar spacing -->
+            <div class="flex-1 lg:ml-64 p-4 sm:p-6 lg:p-8 min-h-screen">
+                <div class="mb-6 sm:mb-8">
+                    <div class="flex items-center space-x-3 mb-2">
+                        <div class="w-8 h-8 flex items-center justify-center">
+                            <svg class="w-6 h-6 text-brown-400" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+                                <path d="M12.5 7H11v6l5.25 3.15.75-1.23-4.5-2.67V7z"/>
+                            </svg>
+                        </div>
+                        <h2 class="text-2xl sm:text-3xl font-bold text-white">Dashboard</h2>
+                    </div>
+                    <p class="text-brown-300 text-sm sm:text-base">Selamat datang di sistem presensi FLEUR CAFÉ - Atelier d'artistes</p>
+                </div>
+
+                <!-- Stats Cards -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+                    <div class="bg-dark-800 rounded-xl shadow-2xl p-4 sm:p-6 border border-brown-600/30 card-hover glow-brown fade-in">
+                        <div class="flex items-center">
+                            <div class="p-3 sm:p-4 rounded-full bg-blue-600 text-white shadow-lg">
+                                <i class="fas fa-users text-xl sm:text-2xl"></i>
+                            </div>
+                            <div class="ml-4 sm:ml-5">
+                                <p class="text-xs sm:text-sm font-medium text-brown-300 uppercase tracking-wide">Total Karyawan</p>
+                                <p class="text-2xl sm:text-3xl font-bold text-white text-glow"><%= stats.total_karyawan %></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-dark-800 rounded-xl shadow-2xl p-4 sm:p-6 border border-brown-600/30 card-hover glow-brown fade-in" style="animation-delay: 0.1s;">
+                        <div class="flex items-center">
+                            <div class="p-3 sm:p-4 rounded-full bg-green-600 text-white shadow-lg">
+                                <i class="fas fa-check-circle text-xl sm:text-2xl"></i>
+                            </div>
+                            <div class="ml-4 sm:ml-5">
+                                <p class="text-xs sm:text-sm font-medium text-brown-300 uppercase tracking-wide">Hadir Hari Ini</p>
+                                <p class="text-2xl sm:text-3xl font-bold text-white text-glow"><%= stats.hadir_hari_ini %></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-dark-800 rounded-xl shadow-2xl p-4 sm:p-6 border border-brown-600/30 card-hover glow-brown fade-in sm:col-span-2 lg:col-span-1" style="animation-delay: 0.2s;">
+                        <div class="flex items-center">
+                            <div class="p-3 sm:p-4 rounded-full bg-yellow-600 text-white shadow-lg">
+                                <i class="fas fa-exclamation-triangle text-xl sm:text-2xl"></i>
+                            </div>
+                            <div class="ml-4 sm:ml-5">
+                                <p class="text-xs sm:text-sm font-medium text-brown-300 uppercase tracking-wide">Belum Aktivasi</p>
+                                <p class="text-2xl sm:text-3xl font-bold text-white text-glow"><%= stats.belum_aktivasi %></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Weekly Presensi Chart -->
+                <div class="bg-dark-800 rounded-xl shadow-2xl p-6 sm:p-8 border border-brown-600/30 card-hover glow-brown fade-in" style="animation-delay: 0.25s;">
+                    <h3 class="text-xl sm:text-2xl font-bold text-white mb-6 flex items-center text-glow">
+                        <i class="fas fa-chart-line text-brown-400 mr-3"></i>
+                        Grafik Presensi 7 Hari Terakhir
+                    </h3>
+                    <div class="relative h-64 sm:h-80">
+                        <canvas id="attendanceChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Real-time Clock - Consistent format (date and time only)
+        function updateClock() {
+            try {
+                const now = new Date();
+                const options = {
+                    day: '2-digit',
+                    month: '2-digit', 
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    timeZone: 'Asia/Makassar' // WITA timezone
+                };
+                
+                const timeString = now.toLocaleString('id-ID', options);
+                const clockElement = document.getElementById('currentTime');
+                
+                if (clockElement) {
+                    clockElement.textContent = timeString;
+                }
+            } catch (error) {
+                console.error('Clock update error:', error);
+                // Fallback to simple time format
+                const clockElement = document.getElementById('currentTime');
+                
+                if (clockElement) {
+                    const now = new Date();
+                    const day = String(now.getDate()).padStart(2, '0');
+                    const month = String(now.getMonth() + 1).padStart(2, '0');
+                    const year = now.getFullYear();
+                    const hours = String(now.getHours()).padStart(2, '0');
+                    const minutes = String(now.getMinutes()).padStart(2, '0');
+                    const seconds = String(now.getSeconds()).padStart(2, '0');
+                    clockElement.textContent = `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+                }
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded, initializing clock...');
+            const clockElement = document.getElementById('currentTime');
+            
+            if (clockElement) {
+                console.log('Clock element found, starting updates...');
+                updateClock();
+                setInterval(updateClock, 1000);
+            } else {
+                console.log('Clock element not found on page load');
+                // Try again after a short delay
+                setTimeout(function() {
+                    const clockElement = document.getElementById('currentTime');
+                    
+                    if (clockElement) {
+                        console.log('Clock element found after delay, starting updates...');
+                        updateClock();
+                        setInterval(updateClock, 1000);
+                    }
+                }, 500);
+            }
+
+            // Initialize presensi chart
+            initAttendanceChart();
+        });
+
+        // Initialize presensi chart
+        function initAttendanceChart() {
+            const ctx = document.getElementById('attendanceChart');
+            if (!ctx) {
+                console.error('Chart canvas not found');
+                return;
+            }
+
+            // Fetch presensi data for the last 7 days
+            fetch('/admin/api/attendance-chart-data')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        createChart(ctx, data.chartData);
+                    } else {
+                        console.error('Failed to load chart data:', data.message);
+                        // Create chart with dummy data if API fails
+                        createChart(ctx, getDummyChartData());
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading chart data:', error);
+                    // Create chart with dummy data if API fails
+                    createChart(ctx, getDummyChartData());
+                });
+        }
+
+        // Create the chart
+        function createChart(ctx, chartData) {
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: chartData.labels,
+                    datasets: [{
+                        label: 'Jumlah Presensi',
+                        data: chartData.data,
+                        borderColor: '#a67c52',
+                        backgroundColor: 'rgba(166, 124, 82, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        pointBackgroundColor: '#a67c52',
+                        pointBorderColor: '#ffffff',
+                        pointBorderWidth: 2,
+                        pointRadius: 6,
+                        pointHoverRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: '#d4bfa6',
+                                font: {
+                                    size: 14
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                color: '#d4bfa6',
+                                stepSize: 1
+                            },
+                            grid: {
+                                color: 'rgba(166, 124, 82, 0.2)'
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                color: '#d4bfa6'
+                            },
+                            grid: {
+                                color: 'rgba(166, 124, 82, 0.2)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Dummy data for fallback
+        function getDummyChartData() {
+            const today = new Date();
+            const labels = [];
+            const data = [];
+            
+            for (let i = 6; i >= 0; i--) {
+                const date = new Date(today);
+                date.setDate(date.getDate() - i);
+                labels.push(date.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' }));
+                data.push(Math.floor(Math.random() * 10) + 5); // Random data between 5-15
+            }
+            
+            return { labels, data };
+        }
+    </script>
+</body>
+</html>

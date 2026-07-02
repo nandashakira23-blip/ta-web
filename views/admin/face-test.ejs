@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/css/tailwind.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: #1a1d20;
+        }
+        .glow {
+            box-shadow: 0 0 20px rgba(166, 124, 82, 0.3);
+        }
+        .glow:hover {
+            box-shadow: 0 0 30px rgba(166, 124, 82, 0.5);
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-dark-900 min-h-screen">
+    <%- include('../partials/navbar') %>
+
+    <div class="pt-16 sm:pt-20 lg:pt-20">
+        <div class="lg:hidden pt-16 sm:pt-20"></div>
+        
+        <div class="flex flex-col lg:flex-row">
+            <%- include('../partials/sidebar', { currentPage: 'face-test' }) %>
+
+            <div class="flex-1 lg:ml-64 p-4 sm:p-6 lg:p-8 min-h-screen">
+                <div class="mb-6 sm:mb-8">
+                    <div class="flex items-center space-x-3 mb-2">
+                        <div class="w-8 h-8 flex items-center justify-center">
+                            <i class="fas fa-camera text-2xl text-brown-400"></i>
+                        </div>
+                        <h2 class="text-2xl sm:text-3xl font-bold text-white">Face Recognition Testing</h2>
+                    </div>
+                    <p class="text-brown-300 text-sm sm:text-base">Upload foto referensi dan cocokkan dengan foto lainnya menggunakan AI</p>
+                </div>
+
+                <!-- Upload Referensi Section -->
+                <div class="bg-dark-800 rounded-xl shadow-2xl p-6 border border-brown-600/30 glow mb-6 fade-in">
+                    <h3 class="text-xl font-bold text-white mb-4">
+                        <i class="fas fa-camera text-brown-400 mr-2"></i> Pilih Foto Referensi
+                    </h3>
+                    <p class="text-brown-300 mb-4">Pilih foto referensi dari karyawan atau upload foto baru untuk testing</p>
+                    
+                    <div id="referenceStatus"></div>
+                    
+                    <div class="flex border-b border-brown-600/30 mb-4">
+                        <button class="px-4 py-2 text-brown-300 border-b-2 border-brown-600 font-medium" onclick="switchTab('reference', 'employee')">
+                            <i class="fas fa-user mr-2"></i> Dari Karyawan
+                        </button>
+                        <button class="px-4 py-2 text-brown-300 hover:text-white" onclick="switchTab('reference', 'upload')">
+                            <i class="fas fa-folder mr-2"></i> Upload File
+                        </button>
+                        <button class="px-4 py-2 text-brown-300 hover:text-white" onclick="switchTab('reference', 'camera')">
+                            <i class="fas fa-camera mr-2"></i> Ambil Foto
+                        </button>
+                    </div>
+                    
+                    <div id="reference-employee-tab">
+                        <div class="mb-4">
+                            <label class="block text-brown-300 mb-2">Pilih Karyawan:</label>
+                            <select id="employeeSelect" class="w-full px-4 py-2 bg-dark-700 border border-brown-600/50 rounded-lg text-white focus:border-brown-400 focus:outline-none" onchange="loadEmployeeReference()">
+                                <option value="">-- Pilih Karyawan --</option>
+                            </select>
+                        </div>
+                        <div id="employeeReferenceInfo" class="hidden mt-4 p-4 bg-dark-700 rounded-lg border border-brown-600/30">
+                            <h5 class="text-white font-medium mb-2">Informasi Referensi:</h5>
+                            <div id="employeeReferenceDetails" class="text-brown-300 text-sm space-y-1"></div>
+                        </div>
+                    </div>
+                    
+                    <div id="reference-upload-tab" class="hidden">
+                        <div class="border-2 border-dashed border-brown-600/50 rounded-lg p-8 text-center cursor-pointer hover:border-brown-400 hover:bg-dark-700 transition-all" onclick="document.getElementById('referenceInput').click()">
+                            <i class="fas fa-cloud-upload-alt text-5xl text-brown-400 mb-4"></i>
+                            <p class="text-brown-300">Klik atau drag & drop foto referensi di sini</p>
+                            <p class="text-brown-400 text-sm mt-2">Format: JPG, PNG, JPEG</p>
+                        </div>
+                        <input type="file" id="referenceInput" class="hidden" accept="image/*">
+                        
+                        <button class="mt-4 px-6 py-3 bg-brown-600 hover:bg-brown-500 text-white rounded-lg font-medium transition-all glow" onclick="uploadReference()" id="uploadReferenceBtn">
+                            <i class="fas fa-upload mr-2"></i> Upload Referensi ke Server
+                        </button>
+                    </div>
+                    
+                    <div id="reference-camera-tab" class="hidden">
+                        <div class="text-center">
+                            <video id="referenceVideo" class="w-full max-w-md h-64 rounded-lg border-2 border-brown-600/50 bg-dark-700 mx-auto" autoplay playsinline></video>
+                            <canvas id="referenceCanvas" class="max-w-md rounded-lg border-2 border-brown-600 mt-4 mx-auto hidden"></canvas>
+                            <div class="mt-4 space-x-2">
+                                <button class="px-4 py-2 bg-brown-600 hover:bg-brown-500 text-white rounded-lg transition-all" onclick="startCamera('reference')">
+                                    <i class="fas fa-video mr-2"></i> Buka Kamera
+                                </button>
+                                <button class="px-4 py-2 bg-brown-600 hover:bg-brown-500 text-white rounded-lg transition-all hidden" onclick="capturePhoto('reference')" id="referenceCaptureBtn">
+                                    <i class="fas fa-camera mr-2"></i> Ambil Foto
+                                </button>
+                                <button class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg transition-all hidden" onclick="stopCamera('reference')" id="referenceStopBtn">
+                                    <i class="fas fa-times mr-2"></i> Tutup Kamera
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <button class="mt-4 px-6 py-3 bg-brown-600 hover:bg-brown-500 text-white rounded-lg font-medium transition-all glow" onclick="uploadReference()" id="uploadReferenceCameraBtn">
+                            <i class="fas fa-upload mr-2"></i> Upload Referensi ke Server
+                        </button>
+                    </div>
+                    
+                    <div id="referencePreview"></div>
+                    <div id="referenceResult"></div>
+                </div>
+
+                <!-- Match Face Section -->
+                <div class="bg-dark-800 rounded-xl shadow-2xl p-6 border border-brown-600/30 glow mb-6 fade-in">
+                    <h3 class="text-xl font-bold text-white mb-4">
+                        <i class="fas fa-search text-brown-400 mr-2"></i> <span id="matchTitle">Cocokkan Wajah</span>
+                    </h3>
+                    <p class="text-brown-300 mb-4"><span id="matchDescription">Upload foto untuk dicocokkan dengan foto referensi</span></p>
+                    
+                    <!-- Mode Selection (only shown when employee is selected) -->
+                    <div id="modeSelection" class="hidden mb-4 p-4 bg-dark-700 rounded-lg border border-brown-600/30">
+                        <label class="block text-brown-300 mb-2">Mode Testing:</label>
+                        <div class="flex space-x-4">
+                            <label class="flex items-center cursor-pointer">
+                                <input type="radio" name="testMode" value="match" checked class="mr-2" onchange="changeTestMode('match')">
+                                <span class="text-white">Face Match Only</span>
+                            </label>
+                            <label class="flex items-center cursor-pointer">
+                                <input type="radio" name="testMode" value="checkin" class="mr-2" onchange="changeTestMode('checkin')">
+                                <span class="text-white">Simulasi Clock In</span>
+                            </label>
+                            <label class="flex items-center cursor-pointer">
+                                <input type="radio" name="testMode" value="checkout" class="mr-2" onchange="changeTestMode('checkout')">
+                                <span class="text-white">Simulasi Clock Out</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="flex border-b border-brown-600/30 mb-4">
+                        <button class="px-4 py-2 text-brown-300 border-b-2 border-brown-600 font-medium" onclick="switchTab('match', 'upload')">
+                            <i class="fas fa-folder mr-2"></i> Upload File
+                        </button>
+                        <button class="px-4 py-2 text-brown-300 hover:text-white" onclick="switchTab('match', 'camera')">
+                            <i class="fas fa-camera mr-2"></i> Ambil Foto
+                        </button>
+                        <button class="px-4 py-2 text-brown-300 hover:text-white" onclick="switchTab('match', 'realtime')">
+                            <i class="fas fa-video mr-2"></i> Real-time
+                        </button>
+                    </div>
+                    
+                    <div id="match-upload-tab">
+                        <div class="border-2 border-dashed border-brown-600/50 rounded-lg p-8 text-center cursor-pointer hover:border-brown-400 hover:bg-dark-700 transition-all" onclick="document.getElementById('matchInput').click()">
+                            <i class="fas fa-cloud-upload-alt text-5xl text-brown-400 mb-4"></i>
+                            <p class="text-brown-300">Klik atau drag & drop foto untuk dicocokkan</p>
+                            <p class="text-brown-400 text-sm mt-2">Format: JPG, PNG, JPEG</p>
+                        </div>
+                        <input type="file" id="matchInput" class="hidden" accept="image/*">
+                    </div>
+                    
+                    <div id="match-camera-tab" class="hidden">
+                        <div class="text-center">
+                            <video id="matchVideo" class="w-full max-w-md h-64 rounded-lg border-2 border-brown-600/50 bg-dark-700 mx-auto" autoplay playsinline></video>
+                            <canvas id="matchCanvas" class="max-w-md rounded-lg border-2 border-brown-600 mt-4 mx-auto hidden"></canvas>
+                            <div class="mt-4 space-x-2">
+                                <button class="px-4 py-2 bg-brown-600 hover:bg-brown-500 text-white rounded-lg transition-all" onclick="startCamera('match')">
+                                    <i class="fas fa-video mr-2"></i> Buka Kamera
+                                </button>
+                                <button class="px-4 py-2 bg-brown-600 hover:bg-brown-500 text-white rounded-lg transition-all hidden" onclick="capturePhoto('match')" id="matchCaptureBtn">
+                                    <i class="fas fa-camera mr-2"></i> Ambil Foto
+                                </button>
+                                <button class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg transition-all hidden" onclick="stopCamera('match')" id="matchStopBtn">
+                                    <i class="fas fa-times mr-2"></i> Tutup Kamera
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="match-realtime-tab" class="hidden">
+                        <div class="text-center">
+                            <div class="mb-4 p-4 bg-blue-900/30 border border-blue-600/50 rounded-lg" id="realtimeStatus">
+                                <i class="fas fa-info-circle text-blue-400 mr-2"></i>
+                                <span class="text-blue-300">Pastikan foto referensi sudah diupload untuk memulai real-time matching</span>
+                            </div>
+                            
+                            <div class="relative inline-block">
+                                <video id="realtimeVideo" class="w-full max-w-lg h-96 rounded-lg border-2 border-brown-600 bg-dark-700 mx-auto" autoplay playsinline></video>
+                                <canvas id="realtimeCanvas" class="max-w-lg rounded-lg border-2 border-brown-600 mt-4 mx-auto hidden"></canvas>
+                                <div id="realtimeOverlay" class="absolute top-0 left-0 w-full h-full pointer-events-none"></div>
+                            </div>
+                            
+                            <div class="mt-4 space-x-2">
+                                <button class="px-6 py-3 bg-brown-600 hover:bg-brown-500 text-white rounded-lg font-medium transition-all glow" onclick="startRealTimeMatching()" id="startRealtimeBtn">
+                                    <i class="fas fa-video mr-2"></i> Mulai Real-time Matching
+                                </button>
+                                <button class="px-6 py-3 bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium transition-all hidden" onclick="stopRealTimeMatching()" id="stopRealtimeBtn">
+                                    <i class="fas fa-stop mr-2"></i> Stop Real-time
+                                </button>
+                            </div>
+                            
+                            <div id="realtimeResults" class="mt-4 p-4 bg-dark-700 rounded-lg border border-brown-600/30 min-h-24"></div>
+                        </div>
+                    </div>
+                    
+                    <button class="mt-4 px-6 py-3 bg-brown-600 hover:bg-brown-500 text-white rounded-lg font-medium transition-all glow" onclick="matchFace()">
+                        <i class="fas fa-check-circle mr-2"></i> Cocokkan Wajah
+                    </button>
+                    
+                    <div id="matchPreview"></div>
+                    <div id="matchResult"></div>
+                </div>
+
+                <!-- Loading -->
+                <div class="hidden text-center py-8" id="loading">
+                    <div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-brown-600 border-t-brown-400"></div>
+                    <p class="text-brown-300 mt-4">Memproses gambar...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/face-test.js"></script>
+</body>
+</html>

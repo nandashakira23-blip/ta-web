@@ -1,0 +1,159 @@
+<!-- Notify Toast + Confirm Dialog (global) -->
+<div id="notify-toast-container" class="fixed top-6 right-6 z-[9999] flex flex-col gap-3 pointer-events-none w-full max-w-sm sm:max-w-md px-4 sm:px-0"></div>
+
+<div id="notify-confirm-backdrop" class="fixed inset-0 z-[9998] bg-black/70 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div id="notify-confirm-panel" class="bg-dark-800 border border-brown-600/40 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform scale-95 opacity-0 transition-all duration-200">
+        <div class="flex items-start gap-4 p-6">
+            <div id="notify-confirm-icon" class="flex-shrink-0 w-12 h-12 rounded-full bg-brown-600/20 flex items-center justify-center text-brown-300 text-xl">
+                <i class="fas fa-question"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+                <h3 id="notify-confirm-title" class="text-lg font-semibold text-white mb-1">Konfirmasi</h3>
+                <p id="notify-confirm-message" class="text-sm text-brown-200 whitespace-pre-line leading-relaxed">Apakah anda yakin?</p>
+            </div>
+        </div>
+        <div class="bg-dark-900/60 px-6 py-4 flex justify-end gap-3">
+            <button id="notify-confirm-cancel" type="button" class="px-4 py-2 rounded-lg text-brown-200 hover:text-white hover:bg-dark-600 transition font-medium">Batal</button>
+            <button id="notify-confirm-ok" type="button" class="px-4 py-2 rounded-lg bg-brown-600 hover:bg-brown-500 text-white transition font-semibold shadow-lg">Ya, Lanjutkan</button>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    if (window.Notify) return;
+
+    var container = document.getElementById('notify-toast-container');
+    var backdrop = document.getElementById('notify-confirm-backdrop');
+    var panel = document.getElementById('notify-confirm-panel');
+    var titleEl = document.getElementById('notify-confirm-title');
+    var messageEl = document.getElementById('notify-confirm-message');
+    var iconEl = document.getElementById('notify-confirm-icon');
+    var okBtn = document.getElementById('notify-confirm-ok');
+    var cancelBtn = document.getElementById('notify-confirm-cancel');
+
+    var TOAST_STYLES = {
+        success: { icon: 'fa-check-circle', border: 'border-emerald-500/40', bg: 'bg-emerald-900/80', iconColor: 'text-emerald-300' },
+        error:   { icon: 'fa-times-circle', border: 'border-rose-500/40',    bg: 'bg-rose-900/80',    iconColor: 'text-rose-300'    },
+        warning: { icon: 'fa-exclamation-triangle', border: 'border-amber-500/40', bg: 'bg-amber-900/80', iconColor: 'text-amber-300' },
+        info:    { icon: 'fa-info-circle',  border: 'border-brown-500/40',   bg: 'bg-dark-800/95',    iconColor: 'text-brown-300'   }
+    };
+
+    var CONFIRM_ICON_STYLES = {
+        question: { icon: 'fa-question',           bg: 'bg-brown-600/20',  color: 'text-brown-300' },
+        warning:  { icon: 'fa-exclamation-triangle', bg: 'bg-amber-600/20', color: 'text-amber-300' },
+        danger:   { icon: 'fa-trash-can',          bg: 'bg-rose-600/20',   color: 'text-rose-300'  },
+        info:     { icon: 'fa-info-circle',        bg: 'bg-sky-600/20',    color: 'text-sky-300'   }
+    };
+
+    function showToast(message, type, opts) {
+        opts = opts || {};
+        var style = TOAST_STYLES[type] || TOAST_STYLES.info;
+        var duration = typeof opts.duration === 'number' ? opts.duration : (type === 'error' ? 6000 : 3500);
+
+        var node = document.createElement('div');
+        node.className = 'pointer-events-auto ' + style.bg + ' border ' + style.border + ' text-white rounded-xl shadow-2xl backdrop-blur-md flex items-start gap-3 px-4 py-3 transform translate-x-6 opacity-0 transition-all duration-200';
+        node.setAttribute('role', type === 'error' ? 'alert' : 'status');
+
+        var iconHtml = '<div class="flex-shrink-0 w-7 h-7 rounded-full bg-black/30 flex items-center justify-center ' + style.iconColor + '"><i class="fas ' + style.icon + '"></i></div>';
+        var titleHtml = opts.title ? '<div class="font-semibold mb-0.5">' + escapeHtml(opts.title) + '</div>' : '';
+        var bodyHtml = '<div class="flex-1 min-w-0 text-sm leading-snug whitespace-pre-line">' + titleHtml + escapeHtml(String(message)) + '</div>';
+        var closeHtml = '<button type="button" class="ml-2 text-white/60 hover:text-white transition" aria-label="Tutup"><i class="fas fa-times"></i></button>';
+
+        node.innerHTML = iconHtml + bodyHtml + closeHtml;
+        container.appendChild(node);
+
+        requestAnimationFrame(function () {
+            node.classList.remove('translate-x-6', 'opacity-0');
+        });
+
+        var timer = null;
+        function dismiss() {
+            if (timer) clearTimeout(timer);
+            node.classList.add('translate-x-6', 'opacity-0');
+            setTimeout(function () {
+                if (node.parentNode) node.parentNode.removeChild(node);
+            }, 220);
+        }
+        node.querySelector('button').addEventListener('click', dismiss);
+        if (duration > 0) timer = setTimeout(dismiss, duration);
+
+        return { dismiss: dismiss };
+    }
+
+    function escapeHtml(str) {
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    var confirmState = { resolve: null, escHandler: null };
+
+    function closeConfirm(result) {
+        panel.classList.add('scale-95', 'opacity-0');
+        backdrop.classList.add('hidden');
+        backdrop.classList.remove('flex');
+        if (confirmState.escHandler) {
+            document.removeEventListener('keydown', confirmState.escHandler);
+            confirmState.escHandler = null;
+        }
+        var resolve = confirmState.resolve;
+        confirmState.resolve = null;
+        if (resolve) resolve(Boolean(result));
+    }
+
+    function showConfirm(opts) {
+        opts = opts || {};
+        var iconStyle = CONFIRM_ICON_STYLES[opts.icon] || CONFIRM_ICON_STYLES[opts.variant] || CONFIRM_ICON_STYLES.question;
+
+        titleEl.textContent = opts.title || 'Konfirmasi';
+        messageEl.textContent = opts.message || 'Apakah anda yakin?';
+        iconEl.className = 'flex-shrink-0 w-12 h-12 rounded-full ' + iconStyle.bg + ' flex items-center justify-center ' + iconStyle.color + ' text-xl';
+        iconEl.innerHTML = '<i class="fas ' + iconStyle.icon + '"></i>';
+
+        okBtn.textContent = opts.okText || 'Ya, Lanjutkan';
+        cancelBtn.textContent = opts.cancelText || 'Batal';
+
+        var danger = opts.variant === 'danger' || opts.icon === 'danger';
+        okBtn.className = 'px-4 py-2 rounded-lg text-white transition font-semibold shadow-lg ' + (danger ? 'bg-rose-600 hover:bg-rose-500' : 'bg-brown-600 hover:bg-brown-500');
+
+        backdrop.classList.remove('hidden');
+        backdrop.classList.add('flex');
+        requestAnimationFrame(function () {
+            panel.classList.remove('scale-95', 'opacity-0');
+        });
+        setTimeout(function () { okBtn.focus(); }, 50);
+
+        return new Promise(function (resolve) {
+            if (confirmState.resolve) confirmState.resolve(false);
+            confirmState.resolve = resolve;
+            confirmState.escHandler = function (event) {
+                if (event.key === 'Escape') closeConfirm(false);
+                else if (event.key === 'Enter') closeConfirm(true);
+            };
+            document.addEventListener('keydown', confirmState.escHandler);
+        });
+    }
+
+    okBtn.addEventListener('click', function () { closeConfirm(true); });
+    cancelBtn.addEventListener('click', function () { closeConfirm(false); });
+    backdrop.addEventListener('click', function (event) {
+        if (event.target === backdrop) closeConfirm(false);
+    });
+
+    window.Notify = {
+        success: function (msg, opts) { return showToast(msg, 'success', opts); },
+        error:   function (msg, opts) { return showToast(msg, 'error', opts); },
+        warning: function (msg, opts) { return showToast(msg, 'warning', opts); },
+        info:    function (msg, opts) { return showToast(msg, 'info', opts); },
+        toast:   function (msg, opts) { return showToast(msg, (opts && opts.type) || 'info', opts); },
+        confirm: showConfirm,
+        confirmDanger: function (message, opts) {
+            return showConfirm(Object.assign({ variant: 'danger', message: message }, opts || {}));
+        }
+    };
+})();
+</script>

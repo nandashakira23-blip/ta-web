@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/css/tailwind.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-dark-900 min-h-screen" style="background:#1a1d20;">
+    <%
+        const q = (filters && filters.q) ? filters.q : '';
+        const pageInfo = pagination || { page: 1, totalPages: 1, hasPrev: false, hasNext: false, prevPage: 1, nextPage: 1, startItem: 0, endItem: 0, totalItems: 0 };
+        const queryQ = q ? `&q=${encodeURIComponent(q)}` : '';
+    %>
+    <%- include('../../partials/navbar') %>
+    <div class="pt-20">
+        <div class="flex flex-col lg:flex-row">
+            <%- include('../../partials/sidebar', { currentPage: 'shift' }) %>
+            <div class="flex-1 lg:ml-64 p-4 sm:p-6 lg:p-8">
+                <div class="flex items-center justify-between mb-6">
+                    <div>
+                        <h1 class="text-3xl font-bold text-white">Kelola Shift</h1>
+                        <p class="text-brown-300">Kelola daftar shift terpisah dari jadwal kerja.</p>
+                    </div>
+                    <a href="/admin/shift/add" class="bg-brown-600 hover:bg-brown-500 text-white px-4 py-3 rounded-lg">
+                        <i class="fas fa-plus mr-2"></i>Tambah Shift
+                    </a>
+                </div>
+
+                <% if (messages.success && messages.success.length) { %>
+                    <% messages.success.forEach(msg => { %>
+                        <div class="mb-4 rounded-lg border border-green-700 bg-green-900/60 px-4 py-3 text-green-200"><%= msg %></div>
+                    <% }) %>
+                <% } %>
+                <% if (messages.error && messages.error.length) { %>
+                    <% messages.error.forEach(msg => { %>
+                        <div class="mb-4 rounded-lg border border-red-700 bg-red-900/60 px-4 py-3 text-red-200"><%= msg %></div>
+                    <% }) %>
+                <% } %>
+
+                <form method="GET" action="/admin/shift" class="mb-4 flex flex-col gap-2 sm:flex-row">
+                    <input
+                        type="text"
+                        name="q"
+                        value="<%= q %>"
+                        placeholder="Cari nama/kode shift..."
+                        class="w-full rounded-lg border border-brown-700/40 bg-dark-700 px-3 py-2 text-white sm:max-w-sm" />
+                    <button type="submit" class="rounded-lg bg-brown-600 px-4 py-2 text-white hover:bg-brown-500">Cari</button>
+                    <% if (q) { %>
+                        <a href="/admin/shift" class="rounded-lg border border-brown-700/40 px-4 py-2 text-brown-200 hover:bg-dark-700">Reset</a>
+                    <% } %>
+                </form>
+
+                <div class="overflow-hidden rounded-xl border border-brown-700/40 bg-dark-800">
+                    <table class="min-w-full divide-y divide-brown-700/40">
+                        <thead class="bg-dark-700 text-brown-200">
+                            <tr>
+                                <th class="px-4 py-3 text-left">Shift</th>
+                                <th class="px-4 py-3 text-left">Jam</th>
+                                <th class="px-4 py-3 text-center">Dipakai</th>
+                                <th class="px-4 py-3 text-center">Status</th>
+                                <th class="px-4 py-3 text-center">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-brown-700/30 text-brown-100">
+                            <% if (shifts.length === 0) { %>
+                                <tr><td colspan="5" class="px-4 py-10 text-center text-brown-300">Belum ada shift.</td></tr>
+                            <% } %>
+                            <% shifts.forEach(shift => { %>
+                                <tr class="hover:bg-dark-700/50">
+                                    <td class="px-4 py-3">
+                                        <div class="font-semibold text-white"><%= shift.nama_shift %></div>
+                                        <div class="text-xs text-brown-300"><%= shift.kode_shift || '-' %></div>
+                                    </td>
+                                    <td class="px-4 py-3"><%= String(shift.jam_masuk).substring(0,5) %> - <%= String(shift.jam_keluar).substring(0,5) %></td>
+                                    <td class="px-4 py-3 text-center"><%= shift.schedule_count %> jadwal / <%= shift.employee_count %> karyawan</td>
+                                    <td class="px-4 py-3 text-center">
+                                        <span class="rounded-full px-3 py-1 text-xs <%= shift.status ? 'bg-green-900/60 text-green-200' : 'bg-gray-800 text-gray-200' %>">
+                                            <%= shift.status ? 'Aktif' : 'Nonaktif' %>
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-3 text-center">
+                                        <a href="/admin/shift/edit/<%= shift.id %>" class="mr-3 text-yellow-400 hover:text-yellow-300">Edit</a>
+                                        <form action="/admin/shift/delete/<%= shift.id %>" method="POST" class="inline js-confirm-delete" data-label="shift &quot;<%= shift.nama_shift %>&quot;">
+                                            <button type="submit" class="text-red-400 hover:text-red-300">Hapus</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            <% }) %>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="mt-4 flex flex-col gap-2 text-sm text-brown-300 sm:flex-row sm:items-center sm:justify-between">
+                    <div>Menampilkan <%= pageInfo.startItem %>-<%= pageInfo.endItem %> dari <%= pageInfo.totalItems %> data</div>
+                    <div class="flex items-center gap-2">
+                        <a href="/admin/shift?page=<%= pageInfo.prevPage %><%= queryQ %>" class="rounded border border-brown-700/40 px-3 py-1 <%= pageInfo.hasPrev ? 'text-brown-200 hover:bg-dark-700' : 'pointer-events-none opacity-40 text-brown-500' %>">Prev</a>
+                        <span class="text-brown-200">Hal <%= pageInfo.page %>/<%= pageInfo.totalPages %></span>
+                        <a href="/admin/shift?page=<%= pageInfo.nextPage %><%= queryQ %>" class="rounded border border-brown-700/40 px-3 py-1 <%= pageInfo.hasNext ? 'text-brown-200 hover:bg-dark-700' : 'pointer-events-none opacity-40 text-brown-500' %>">Next</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('submit', async function (event) {
+            const form = event.target.closest('form.js-confirm-delete');
+            if (!form) return;
+            event.preventDefault();
+            const label = form.dataset.label || 'item ini';
+            const ok = await Notify.confirm({
+                title: `Hapus ${label}?`,
+                message: 'Tindakan ini tidak bisa dibatalkan.',
+                okText: 'Ya, Hapus',
+                cancelText: 'Batal',
+                variant: 'danger',
+                icon: 'danger'
+            });
+            if (ok) form.submit();
+        });
+    </script>
+
+    <%- include('../../partials/notify') %>
+</body>
+</html>

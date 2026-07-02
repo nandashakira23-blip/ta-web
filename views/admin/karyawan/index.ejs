@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/css/tailwind.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        /* Custom Dark Theme Styles */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #212529;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #a67c52;
+            border-radius: 4px;
+            border: 1px solid #343a40;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #b8956b;
+        }
+        .solid-background {
+            background: #1a1d20;
+        }
+        .glow-brown {
+            box-shadow: 0 2px 8px rgba(166, 124, 82, 0.2);
+        }
+        .card-hover {
+            transition: all 0.2s ease;
+        }
+        .card-hover:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        .text-glow {
+            text-shadow: 0 0 10px rgba(166, 124, 82, 0.5);
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .glass-effect {
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            background: rgba(33, 37, 41, 0.8);
+            border: 1px solid rgba(166, 124, 82, 0.3);
+        }
+    </style>
+</head>
+<body class="bg-dark-900 min-h-screen solid-background">
+    <%
+        const q = (filters && filters.q) ? filters.q : '';
+        const pageInfo = pagination || { page: 1, totalPages: 1, hasPrev: false, hasNext: false, prevPage: 1, nextPage: 1, startItem: 0, endItem: 0, totalItems: 0 };
+        const queryQ = q ? `&q=${encodeURIComponent(q)}` : '';
+        function uploadUrl(value, fallbackFolder) {
+            if (!value) return null;
+            const normalized = String(value).replace(/\\/g, '/').replace(/^public\//, '');
+            if (/^https?:\/\//i.test(normalized)) return normalized;
+            if (normalized.startsWith('uploads/')) return '/' + normalized;
+            return fallbackFolder ? `${fallbackFolder}/${normalized}` : '/' + normalized;
+        }
+    %>
+    <%- include('../../partials/navbar') %>
+
+    <!-- Content with proper spacing for fixed navbar -->
+    <div class="pt-16 sm:pt-20 lg:pt-20">
+        <!-- Mobile menu spacing -->
+        <div class="lg:hidden pt-16 sm:pt-20"></div>
+        
+        <!-- Sidebar & Content -->
+        <div class="flex flex-col lg:flex-row">
+            <%- include('../../partials/sidebar', { currentPage: 'karyawan' }) %>
+
+            <!-- Main Content with sidebar spacing -->
+            <div class="flex-1 lg:ml-64 p-4 sm:p-6 lg:p-8 min-h-screen">
+                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 sm:mb-8">
+                    <div class="mb-4 sm:mb-0">
+                        <div class="flex items-center space-x-3 mb-2">
+                            <div class="w-8 h-8 flex items-center justify-center">
+                                <i class="fas fa-users text-brown-400 text-xl"></i>
+                            </div>
+                            <h2 class="text-2xl sm:text-3xl font-bold text-white text-glow">Master Karyawan</h2>
+                        </div>
+                        <p class="text-brown-300 text-sm sm:text-base">Kelola data karyawan FLEUR CAFÉ - Atelier d'artistes</p>
+                    </div>
+                    <a href="/admin/karyawan/add" class="bg-brown-600 hover:bg-brown-500 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg transition duration-200 text-sm sm:text-base text-center shadow-lg hover:shadow-brown-500/30 card-hover">
+                        <i class="fas fa-plus mr-2"></i>Tambah Karyawan
+                    </a>
+                </div>
+
+                <!-- Flash Messages -->
+                <% if (success && success.length > 0) { %>
+                    <div class="bg-green-900/80 border border-green-600/50 text-green-200 px-4 py-3 rounded-lg mb-4 shadow-lg backdrop-blur-sm fade-in">
+                        <i class="fas fa-check-circle mr-2"></i><%= success %>
+                    </div>
+                <% } %>
+
+                <% if (error && error.length > 0) { %>
+                    <div class="bg-red-900/80 border border-red-600/50 text-red-200 px-4 py-3 rounded-lg mb-4 shadow-lg backdrop-blur-sm fade-in">
+                        <i class="fas fa-exclamation-circle mr-2"></i><%= error %>
+                    </div>
+                <% } %>
+
+                <form method="GET" action="/admin/karyawan" class="mb-4 flex flex-col gap-2 sm:flex-row">
+                    <input
+                        type="text"
+                        name="q"
+                        value="<%= q %>"
+                        placeholder="Cari NIK, nama, email, jabatan..."
+                        class="w-full rounded-lg border border-brown-700/40 bg-dark-700 px-3 py-2 text-white sm:max-w-sm" />
+                    <button type="submit" class="rounded-lg bg-brown-600 px-4 py-2 text-white hover:bg-brown-500">Cari</button>
+                    <% if (q) { %>
+                        <a href="/admin/karyawan" class="rounded-lg border border-brown-700/40 px-4 py-2 text-brown-200 hover:bg-dark-700">Reset</a>
+                    <% } %>
+                </form>
+
+                <!-- Karyawan Table -->
+                <div class="bg-dark-800 rounded-xl shadow-2xl overflow-hidden border border-brown-600/30 card-hover glow-brown fade-in">
+                    <!-- Mobile Card View -->
+                    <div class="block sm:hidden">
+                        <% if (karyawan.length === 0) { %>
+                            <div class="p-6 text-center text-brown-300">
+                                <i class="fas fa-users text-4xl mb-4 text-brown-400"></i>
+                                <p>Belum ada data karyawan</p>
+                            </div>
+                        <% } else { %>
+                            <% karyawan.forEach(function(k) { %>
+                                <div class="border-b border-brown-600/30 p-4">
+                                    <div class="flex items-start justify-between">
+                                        <div class="flex-1">
+                                            <div class="flex items-center mb-3">
+                                                <% 
+                                                // Prioritas foto: trained_photo > foto_referensi > profile_picture > default
+                                                let photoUrl = null;
+                                                if (k.trained_photo) {
+                                                    photoUrl = uploadUrl(k.trained_photo, '/uploads/karyawan');
+                                                } else if (k.foto_referensi) {
+                                                    photoUrl = uploadUrl(k.foto_referensi, '/uploads/karyawan');
+                                                } else if (k.profile_picture) {
+                                                    photoUrl = uploadUrl(k.profile_picture, '/uploads/profiles');
+                                                }
+                                                %>
+                                                <% if (photoUrl) { %>
+                                                    <img src="<%= photoUrl %>" alt="Foto <%= k.nama %>" 
+                                                         onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\'w-12 h-12 rounded-full bg-brown-700 flex items-center justify-center border-2 border-brown-600/50\'><i class=\'fas fa-user text-brown-300\'></i></div>';"
+                                                         class="w-12 h-12 rounded-full object-cover mr-3 border-2 border-brown-600/50 cursor-pointer"
+                                                         onclick="showImage('<%= photoUrl %>')">
+                                                <% } else { %>
+                                                    <div class="w-12 h-12 rounded-full bg-brown-700 flex items-center justify-center mr-3 border-2 border-brown-600/50">
+                                                        <i class="fas fa-user text-brown-300"></i>
+                                                    </div>
+                                                <% } %>
+                                                <div>
+                                                    <h3 class="font-semibold text-white"><%= k.nama %></h3>
+                                                    <p class="text-sm text-brown-300 font-mono"><%= k.nik %></p>
+                                                </div>
+                                            </div>
+                                            <div class="flex items-center justify-between">
+                                                <div>
+                                                    <p class="text-sm text-brown-200 mb-1 font-medium"><%= k.jabatan %></p>
+                                                    <p class="text-xs text-brown-400 mb-2"><%= k.nama_shift || k.jadwal_kerja || 'Belum ada jadwal' %></p>
+                                                    <% if (k.is_activated) { %>
+                                                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-900/50 text-green-300 border border-green-600/50">
+                                                            <i class="fas fa-check-circle mr-1"></i>Aktif
+                                                        </span>
+                                                    <% } else { %>
+                                                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-900/50 text-yellow-300 border border-yellow-600/50">
+                                                            <i class="fas fa-clock mr-1"></i>Belum Aktivasi
+                                                        </span>
+                                                    <% } %>
+                                                    <% if (k.email) { %>
+                                                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full <%= k.email_verified_at ? 'bg-blue-900/50 text-blue-300 border border-blue-600/50' : 'bg-orange-900/50 text-orange-300 border border-orange-600/50' %> ml-1">
+                                                            <i class="fas fa-envelope mr-1"></i><%= k.email_verified_at ? 'Email Verified' : 'Email Pending' %>
+                                                        </span>
+                                                    <% } %>
+                                                    <% if (k.can_approve_leave) { %>
+                                                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-purple-900/50 text-purple-300 border border-purple-600/50 ml-1">
+                                                            <i class="fas fa-user-check mr-1"></i>Approver
+                                                        </span>
+                                                    <% } %>
+                                                </div>
+                                                <div class="flex space-x-2">
+                                                    <button class="edit-karyawan-btn-mobile text-blue-400 hover:text-blue-300 transition duration-200 p-2 rounded-lg hover:bg-blue-900/30"
+                                                            data-id="<%= k.id %>"
+                                                            data-nik="<%= k.nik %>"
+                                                            data-nama="<%= k.nama %>"
+                                                            data-email="<%= k.email || '' %>"
+                                                            data-phone="<%= k.phone || '' %>"
+                                                            data-jabatan="<%= k.id_jabatan || '' %>"
+                                                            data-schedule="<%= k.id_jadwal_kerja || '' %>"
+                                                            data-approver="<%= k.can_approve_leave ? '1' : '' %>">
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
+                                                    <button class="reset-karyawan-btn-mobile text-orange-400 hover:text-orange-300 transition duration-200 p-2 rounded-lg hover:bg-orange-900/30"
+                                                            title="Reset Karyawan"
+                                                            data-id="<%= k.id %>"
+                                                            data-nama="<%= k.nama %>">
+                                                        <i class="fas fa-redo"></i>
+                                                    </button>
+                                                    <form method="POST" action="/admin/karyawan/delete/<%= k.id %>"
+                                                          class="inline js-delete-karyawan"
+                                                          data-nama="<%= k.nama %>">
+                                                        <button type="submit" class="text-red-400 hover:text-red-300 transition duration-200 p-2 rounded-lg hover:bg-red-900/30">
+                                                            <i class="fas fa-trash"></i>
+                                                        </button>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            <% }); %>
+                        <% } %>
+                    </div>
+
+                    <!-- Desktop Table View -->
+                    <div class="hidden sm:block overflow-x-auto">
+                        <table class="min-w-full divide-y divide-brown-600/30">
+                            <thead class="bg-brown-800">
+                                <tr>
+                                    <th class="px-6 py-4 text-left text-xs font-semibold text-brown-200 uppercase tracking-wider">NIK</th>
+                                    <th class="px-6 py-4 text-left text-xs font-semibold text-brown-200 uppercase tracking-wider">Nama</th>
+                                    <th class="px-6 py-4 text-left text-xs font-semibold text-brown-200 uppercase tracking-wider">Jabatan</th>
+                                    <th class="px-6 py-4 text-left text-xs font-semibold text-brown-200 uppercase tracking-wider">Status</th>
+                                    <th class="px-6 py-4 text-left text-xs font-semibold text-brown-200 uppercase tracking-wider">Foto</th>
+                                    <th class="px-6 py-4 text-left text-xs font-semibold text-brown-200 uppercase tracking-wider">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-brown-600/30">
+                                <% if (karyawan.length === 0) { %>
+                                    <tr>
+                                        <td colspan="6" class="px-6 py-12 text-center text-brown-300">
+                                            <i class="fas fa-users text-4xl mb-4 text-brown-400"></i>
+                                            <p>Belum ada data karyawan</p>
+                                        </td>
+                                    </tr>
+                                <% } else { %>
+                                    <% karyawan.forEach(function(k) { %>
+                                        <tr>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-brown-200">
+                                                <%= k.nik %>
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">
+                                                <%= k.nama %>
+                                            </td>
+                                        <td class="px-6 py-4 text-sm text-brown-200 font-medium">
+                                            <div><%= k.jabatan %></div>
+                                            <div class="text-xs text-brown-400 mt-1"><%= k.nama_shift || k.jadwal_kerja || 'Belum ada jadwal' %></div>
+                                        </td>
+                                        <td class="px-6 py-4">
+                                            <% if (k.is_activated) { %>
+                                                <span class="inline-flex px-3 py-1 text-xs font-semibold rounded-full bg-green-900/50 text-green-300 border border-green-600/50">
+                                                    <i class="fas fa-check-circle mr-1"></i>Aktif
+                                                    </span>
+                                            <% } else { %>
+                                                <span class="inline-flex px-3 py-1 text-xs font-semibold rounded-full bg-yellow-900/50 text-yellow-300 border border-yellow-600/50">
+                                                    <i class="fas fa-clock mr-1"></i>Belum Aktivasi
+                                                </span>
+                                            <% } %>
+                                            <% if (k.email) { %>
+                                                <div class="mt-2">
+                                                    <span class="inline-flex px-3 py-1 text-xs font-semibold rounded-full <%= k.email_verified_at ? 'bg-blue-900/50 text-blue-300 border border-blue-600/50' : 'bg-orange-900/50 text-orange-300 border border-orange-600/50' %>">
+                                                        <i class="fas fa-envelope mr-1"></i><%= k.email_verified_at ? 'Verified' : 'Pending' %>
+                                                    </span>
+                                                </div>
+                                            <% } %>
+                                            <% if (k.can_approve_leave) { %>
+                                                <div class="mt-2">
+                                                    <span class="inline-flex px-3 py-1 text-xs font-semibold rounded-full bg-purple-900/50 text-purple-300 border border-purple-600/50">
+                                                        <i class="fas fa-user-check mr-1"></i>Approver
+                                                    </span>
+                                                </div>
+                                            <% } %>
+                                        </td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-brown-200">
+                                                <% 
+                                                let photoUrl = null;
+                                                if (k.trained_photo) {
+                                                    photoUrl = uploadUrl(k.trained_photo, '/uploads/karyawan');
+                                                } else if (k.foto_referensi) {
+                                                    photoUrl = uploadUrl(k.foto_referensi, '/uploads/karyawan');
+                                                } else if (k.profile_picture) {
+                                                    photoUrl = uploadUrl(k.profile_picture, '/uploads/profiles');
+                                                }
+                                                %>
+                                                <% if (photoUrl) { %>
+                                                    <img src="<%= photoUrl %>" alt="<%= k.nama %>" 
+                                                         onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+                                                         class="w-10 h-10 rounded-full object-cover cursor-pointer border-2 border-brown-600/50 hover:border-brown-400 transition duration-200"
+                                                         onclick="showImage('<%= photoUrl %>')">
+                                                    <div class="w-10 h-10 rounded-full bg-brown-700 flex items-center justify-center border-2 border-brown-600/50" style="display:none;">
+                                                        <i class="fas fa-user text-brown-300 text-sm"></i>
+                                                    </div>
+                                                <% } else { %>
+                                                    <div class="w-10 h-10 rounded-full bg-brown-700 flex items-center justify-center border-2 border-brown-600/50">
+                                                        <i class="fas fa-user text-brown-300 text-sm"></i>
+                                                    </div>
+                                                <% } %>
+                                            </td>
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                                <div class="flex space-x-2">
+                                                    <button class="edit-karyawan-btn text-blue-400 hover:text-blue-300 transition duration-200 p-2 rounded-lg hover:bg-blue-900/30" 
+                                                            title="Edit Karyawan"
+                                                            data-id="<%= k.id %>"
+                                                            data-nik="<%= k.nik %>"
+                                                            data-nama="<%= k.nama %>"
+                                                            data-email="<%= k.email || '' %>"
+                                                            data-phone="<%= k.phone || '' %>"
+                                                            data-jabatan="<%= k.id_jabatan || '' %>"
+                                                            data-schedule="<%= k.id_jadwal_kerja || '' %>"
+                                                            data-approver="<%= k.can_approve_leave ? '1' : '' %>">
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
+                                                    <button class="reset-karyawan-btn text-orange-400 hover:text-orange-300 transition duration-200 p-2 rounded-lg hover:bg-orange-900/30" 
+                                                            title="Reset Karyawan"
+                                                            data-id="<%= k.id %>"
+                                                            data-nama="<%= k.nama %>">
+                                                        <i class="fas fa-redo"></i>
+                                                    </button>
+                                                    <form method="POST" action="/admin/karyawan/delete/<%= k.id %>"
+                                                          class="inline js-delete-karyawan"
+                                                          data-nama="<%= k.nama %>">
+                                                        <button type="submit" class="text-red-400 hover:text-red-300 transition duration-200 p-2 rounded-lg hover:bg-red-900/30" title="Hapus Karyawan">
+                                                            <i class="fas fa-trash"></i>
+                                                        </button>
+                                                    </form>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    <% }); %>
+                                <% } %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="mt-4 flex flex-col gap-2 text-sm text-brown-300 sm:flex-row sm:items-center sm:justify-between">
+                    <div>Menampilkan <%= pageInfo.startItem %>-<%= pageInfo.endItem %> dari <%= pageInfo.totalItems %> data</div>
+                    <div class="flex items-center gap-2">
+                        <a href="/admin/karyawan?page=<%= pageInfo.prevPage %><%= queryQ %>" class="rounded border border-brown-700/40 px-3 py-1 <%= pageInfo.hasPrev ? 'text-brown-200 hover:bg-dark-700' : 'pointer-events-none opacity-40 text-brown-500' %>">Prev</a>
+                        <span class="text-brown-200">Hal <%= pageInfo.page %>/<%= pageInfo.totalPages %></span>
+                        <a href="/admin/karyawan?page=<%= pageInfo.nextPage %><%= queryQ %>" class="rounded border border-brown-700/40 px-3 py-1 <%= pageInfo.hasNext ? 'text-brown-200 hover:bg-dark-700' : 'pointer-events-none opacity-40 text-brown-500' %>">Next</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Image Modal -->
+    <div id="imageModal" class="fixed inset-0 bg-black bg-opacity-80 hidden items-center justify-center z-50 backdrop-blur-sm">
+        <div class="max-w-4xl max-h-4xl p-4 relative">
+            <img id="modalImage" src="" alt="" class="max-w-full max-h-full rounded-lg shadow-2xl border-2 border-brown-600/50">
+            <button onclick="closeImageModal()" class="absolute top-2 right-2 text-white text-2xl hover:text-brown-300 bg-dark-800/80 rounded-full w-10 h-10 flex items-center justify-center transition duration-200">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Edit Karyawan Modal -->
+    <div id="editKaryawanModal" class="fixed inset-0 bg-black bg-opacity-70 hidden items-center justify-center z-50 p-4 backdrop-blur-sm">
+        <div class="bg-dark-800 rounded-xl max-w-2xl w-full max-h-96 overflow-hidden shadow-2xl border border-brown-600/30">
+            <div class="p-4 sm:p-6 border-b border-brown-600/30 bg-brown-800/50">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-lg sm:text-xl font-bold text-white text-glow flex items-center">
+                        <i class="fas fa-user-edit text-brown-400 mr-3"></i>
+                        Edit Karyawan
+                    </h3>
+                    <button type="button" id="closeEditModal" class="text-brown-300 hover:text-white p-2 rounded-lg hover:bg-dark-600 transition duration-200">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="p-4 sm:p-6 overflow-y-auto max-h-80">
+                <form id="editKaryawanForm" class="space-y-4">
+                    <input type="hidden" id="editKaryawanId">
+                    
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label for="editNik" class="block text-sm font-semibold text-brown-300 mb-2">
+                                <i class="fas fa-id-card mr-2"></i>NIK *
+                            </label>
+                            <input type="text" id="editNik" required
+                                   class="w-full px-3 py-2 bg-dark-700 border border-brown-600/50 rounded-lg focus:ring-2 focus:ring-brown-500 focus:border-brown-400 text-white placeholder-brown-400">
+                        </div>
+                        <div>
+                            <label for="editNama" class="block text-sm font-semibold text-brown-300 mb-2">
+                                <i class="fas fa-user mr-2"></i>Nama Lengkap *
+                            </label>
+                            <input type="text" id="editNama" required
+                                   class="w-full px-3 py-2 bg-dark-700 border border-brown-600/50 rounded-lg focus:ring-2 focus:ring-brown-500 focus:border-brown-400 text-white placeholder-brown-400">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label for="editEmail" class="block text-sm font-semibold text-brown-300 mb-2">
+                                <i class="fas fa-envelope mr-2"></i>Email
+                            </label>
+                            <input type="email" id="editEmail"
+                                   class="w-full px-3 py-2 bg-dark-700 border border-brown-600/50 rounded-lg focus:ring-2 focus:ring-brown-500 focus:border-brown-400 text-white placeholder-brown-400">
+                        </div>
+                        <div>
+                            <label for="editPhone" class="block text-sm font-semibold text-brown-300 mb-2">
+                                <i class="fas fa-phone mr-2"></i>No. HP
+                            </label>
+                            <input type="text" id="editPhone"
+                                   class="w-full px-3 py-2 bg-dark-700 border border-brown-600/50 rounded-lg focus:ring-2 focus:ring-brown-500 focus:border-brown-400 text-white placeholder-brown-400">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label for="editJabatan" class="block text-sm font-semibold text-brown-300 mb-2">
+                                <i class="fas fa-briefcase mr-2"></i>Jabatan *
+                            </label>
+                            <select id="editJabatan" required
+                                    class="w-full px-3 py-2 bg-dark-700 border border-brown-600/50 rounded-lg focus:ring-2 focus:ring-brown-500 focus:border-brown-400 text-white">
+                                <option value="">Pilih Jabatan</option>
+                                <!-- Options will be loaded dynamically -->
+                            </select>
+                        </div>
+
+                        <div>
+                            <label for="editSchedule" class="block text-sm font-semibold text-brown-300 mb-2">
+                                <i class="fas fa-clock mr-2"></i>Jadwal Kerja / Shift
+                            </label>
+                            <select id="editSchedule"
+                                    class="w-full px-3 py-2 bg-dark-700 border border-brown-600/50 rounded-lg focus:ring-2 focus:ring-brown-500 focus:border-brown-400 text-white">
+                                <option value="">Pilih Jadwal Kerja</option>
+                                <!-- Options will be loaded dynamically -->
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 gap-4">
+                        <div class="flex items-end pb-2">
+                            <label class="inline-flex items-center gap-3 text-brown-200">
+                                <input type="checkbox" id="editCanApproveLeave"
+                                       class="h-5 w-5 rounded border-brown-600/50 bg-dark-700 text-brown-600 focus:ring-brown-500">
+                                <span>Dapat approve izin/sakit</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-3 pt-4 border-t border-brown-600/30">
+                        <button type="button" id="cancelEditBtn" 
+                                class="px-4 py-2 border border-brown-600/50 text-brown-300 rounded-lg hover:bg-dark-600 transition duration-200">
+                            Batal
+                        </button>
+                        <button type="submit" 
+                                class="px-4 py-2 bg-brown-600 hover:bg-brown-500 text-white rounded-lg transition duration-200 shadow-lg hover:shadow-brown-500/30">
+                            <i class="fas fa-save mr-2"></i>Simpan Perubahan
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Real-time Clock - Consistent format (date and time only)
+        function updateClock() {
+            try {
+                const now = new Date();
+                const options = {
+                    day: '2-digit',
+                    month: '2-digit', 
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    timeZone: 'Asia/Makassar' // WITA timezone
+                };
+                
+                const timeString = now.toLocaleString('id-ID', options);
+                const clockElement = document.getElementById('currentTime');
+                
+                if (clockElement) {
+                    clockElement.textContent = timeString;
+                }
+            } catch (error) {
+                console.error('Clock update error:', error);
+                // Fallback to simple time format
+                const clockElement = document.getElementById('currentTime');
+                
+                if (clockElement) {
+                    const now = new Date();
+                    const day = String(now.getDate()).padStart(2, '0');
+                    const month = String(now.getMonth() + 1).padStart(2, '0');
+                    const year = now.getFullYear();
+                    const hours = String(now.getHours()).padStart(2, '0');
+                    const minutes = String(now.getMinutes()).padStart(2, '0');
+                    const seconds = String(now.getSeconds()).padStart(2, '0');
+                    clockElement.textContent = `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+                }
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded, initializing clock...');
+            const clockElement = document.getElementById('currentTime');
+            
+            if (clockElement) {
+                console.log('Clock element found, starting updates...');
+                updateClock();
+                setInterval(updateClock, 1000);
+            } else {
+                console.log('Clock element not found on page load');
+                // Try again after a short delay
+                setTimeout(function() {
+                    const clockElement = document.getElementById('currentTime');
+                    
+                    if (clockElement) {
+                        console.log('Clock element found after delay, starting updates...');
+                        updateClock();
+                        setInterval(updateClock, 1000);
+                    }
+                }, 500);
+            }
+        });
+
+        // Image modal functions
+        function showImage(src) {
+            document.getElementById('modalImage').src = src;
+            document.getElementById('imageModal').classList.remove('hidden');
+            document.getElementById('imageModal').classList.add('flex');
+        }
+
+        function closeImageModal() {
+            document.getElementById('imageModal').classList.add('hidden');
+            document.getElementById('imageModal').classList.remove('flex');
+        }
+
+        // Close image modal when clicking outside
+        document.getElementById('imageModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeImageModal();
+            }
+        });
+
+        // Edit Karyawan Modal Functions
+        const editModal = document.getElementById('editKaryawanModal');
+        const editForm = document.getElementById('editKaryawanForm');
+        const closeEditModal = document.getElementById('closeEditModal');
+        const cancelEditBtn = document.getElementById('cancelEditBtn');
+
+        // Cache for jabatan options
+        let jabatanOptionsCache = null;
+        // Cache for schedule options
+        let scheduleOptionsCache = null;
+
+        // Load jabatan options for edit modal
+        async function loadJabatanOptions(forceReload = false) {
+            console.log('loadJabatanOptions called, forceReload:', forceReload);
+            
+            // Use cache if available and not forcing reload
+            if (jabatanOptionsCache && !forceReload) {
+                console.log('Using cached jabatan options');
+                populateJabatanSelect(jabatanOptionsCache);
+                return true;
+            }
+
+            try {
+                console.log('Fetching jabatan from API...');
+                const response = await fetch('/admin/jabatan/list', {
+                    method: 'GET',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('HTTP error response:', errorText);
+                    throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+                }
+                
+                const result = await response.json();
+                console.log('Jabatan API response:', result);
+                
+                if (result.success) {
+                    jabatanOptionsCache = result.data;
+                    populateJabatanSelect(result.data);
+                    console.log('Jabatan options loaded successfully');
+                    return true;
+                } else {
+                    console.error('Failed to load jabatan:', result.message);
+                    Notify.error('Gagal memuat data jabatan: ' + result.message);
+                    return false;
+                }
+            } catch (error) {
+                console.error('Failed to load jabatan options:', error);
+                Notify.error('Gagal memuat data jabatan: ' + error.message);
+                return false;
+            }
+        }
+
+        // Populate jabatan select element
+        function populateJabatanSelect(jabatanData) {
+            console.log('populateJabatanSelect called with:', jabatanData);
+            
+            const select = document.getElementById('editJabatan');
+            if (!select) {
+                console.error('editJabatan select element not found!');
+                return;
+            }
+            
+            select.innerHTML = '<option value="">Pilih Jabatan</option>';
+            
+            if (jabatanData && Array.isArray(jabatanData)) {
+                jabatanData.forEach(jabatan => {
+                    const option = document.createElement('option');
+                    option.value = String(jabatan.id);
+                    option.textContent = jabatan.nama_jabatan;
+                    select.appendChild(option);
+                });
+                console.log('Jabatan select populated with', jabatanData.length, 'options');
+            } else {
+                console.error('Invalid jabatan data:', jabatanData);
+            }
+        }
+
+        // Load schedule options for edit modal
+        async function loadScheduleOptions(forceReload = false) {
+            console.log('loadScheduleOptions called, forceReload:', forceReload);
+            
+            // Use cache if available and not forcing reload
+            if (scheduleOptionsCache && !forceReload) {
+                console.log('Using cached schedule options');
+                populateScheduleSelect(scheduleOptionsCache);
+                return true;
+            }
+
+            try {
+                console.log('Fetching schedules from API...');
+                const response = await fetch('/admin/schedules/list', {
+                    method: 'GET',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                console.log('Response status:', response.status);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('HTTP error response:', errorText);
+                    throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+                }
+                
+                const result = await response.json();
+                console.log('Schedule API response:', result);
+                
+                if (result.success) {
+                    scheduleOptionsCache = result.data;
+                    populateScheduleSelect(result.data);
+                    console.log('Schedule options loaded successfully');
+                    return true;
+                } else {
+                    console.error('Failed to load schedules:', result.message);
+                    // Don't alert, just log - schedule is optional
+                    return false;
+                }
+            } catch (error) {
+                console.error('Failed to load schedule options:', error);
+                // Don't alert, just log - schedule is optional
+                return false;
+            }
+        }
+
+        // Populate schedule select element
+        function populateScheduleSelect(scheduleData) {
+            console.log('populateScheduleSelect called with:', scheduleData);
+            
+            const select = document.getElementById('editSchedule');
+            if (!select) {
+                console.error('editSchedule select element not found!');
+                return;
+            }
+            
+            select.innerHTML = '<option value="">Pilih Jadwal Kerja</option>';
+            
+            if (scheduleData && Array.isArray(scheduleData)) {
+                scheduleData.forEach(schedule => {
+                    const option = document.createElement('option');
+                    option.value = String(schedule.id);
+                    const jamMasuk = schedule.jam_masuk ? schedule.jam_masuk.substring(0, 5) : '';
+                    const jamKeluar = schedule.jam_keluar ? schedule.jam_keluar.substring(0, 5) : '';
+                    option.textContent = `${schedule.nama} (${jamMasuk} - ${jamKeluar})`;
+                    select.appendChild(option);
+                });
+                console.log('Schedule select populated with', scheduleData.length, 'options');
+            } else {
+                console.error('Invalid schedule data:', scheduleData);
+            }
+        }
+
+        // Edit karyawan function
+        async function editKaryawan(id, nik, nama, email, phone, idJabatan, idSchedule, canApproveLeave) {
+            console.log('editKaryawan called with:', { id, nik, nama, email, phone, idJabatan, idSchedule, canApproveLeave });
+            
+            try {
+                // Ensure jabatan options are loaded
+                console.log('Loading jabatan options...');
+                const loaded = await loadJabatanOptions();
+                if (!loaded) {
+                    Notify.error('Gagal memuat data jabatan. Silakan coba lagi.');
+                    return;
+                }
+                
+                // Load schedule options (optional, don't fail if it doesn't load)
+                console.log('Loading schedule options...');
+                await loadScheduleOptions();
+                
+                console.log('Setting form values...');
+                // Set form values
+                document.getElementById('editKaryawanId').value = id;
+                document.getElementById('editNik').value = nik;
+                document.getElementById('editNama').value = nama;
+                document.getElementById('editEmail').value = email || '';
+                document.getElementById('editPhone').value = phone || '';
+                document.getElementById('editCanApproveLeave').checked = canApproveLeave === '1';
+                
+                // Set jabatan dropdown to current value
+                const jabatanSelect = document.getElementById('editJabatan');
+                const jabatanId = idJabatan && idJabatan !== 'null' && idJabatan !== '' ? String(idJabatan) : '';
+                
+                // Set schedule dropdown to current value
+                const scheduleSelect = document.getElementById('editSchedule');
+                const scheduleId = idSchedule && idSchedule !== 'null' && idSchedule !== '' ? String(idSchedule) : '';
+                
+                // Set values directly — options already populated by await above
+                jabatanSelect.value = jabatanId;
+                scheduleSelect.value = scheduleId;
+                
+                console.log('Jabatan set to:', jabatanSelect.value, '(target:', jabatanId, ')');
+                console.log('Schedule set to:', scheduleSelect.value, '(target:', scheduleId, ')');
+                
+                console.log('Showing modal...');
+                // Show modal
+                const editModal = document.getElementById('editKaryawanModal');
+                if (editModal) {
+                    editModal.classList.remove('hidden');
+                    editModal.classList.add('flex');
+                    console.log('Modal shown successfully');
+                } else {
+                    console.error('Modal element not found!');
+                    Notify.error('Modal tidak ditemukan');
+                }
+            } catch (error) {
+                console.error('Error in editKaryawan:', error);
+                Notify.error('Terjadi kesalahan saat membuka form edit: ' + error.message);
+            }
+        }
+
+        // Event listeners for edit buttons
+        document.addEventListener('click', function(e) {
+            // Desktop edit button
+            if (e.target.closest('.edit-karyawan-btn')) {
+                e.preventDefault();
+                const btn = e.target.closest('.edit-karyawan-btn');
+                const id = btn.dataset.id;
+                const nik = btn.dataset.nik;
+                const nama = btn.dataset.nama;
+                const email = btn.dataset.email;
+                const phone = btn.dataset.phone;
+                const jabatan = btn.dataset.jabatan;
+                const schedule = btn.dataset.schedule;
+                const approver = btn.dataset.approver;
+
+                console.log('Edit button clicked:', { id, nik, nama, email, phone, jabatan, schedule, approver });
+                editKaryawan(id, nik, nama, email, phone, jabatan, schedule, approver);
+            }
+            
+            // Mobile edit button
+            if (e.target.closest('.edit-karyawan-btn-mobile')) {
+                e.preventDefault();
+                const btn = e.target.closest('.edit-karyawan-btn-mobile');
+                const id = btn.dataset.id;
+                const nik = btn.dataset.nik;
+                const nama = btn.dataset.nama;
+                const email = btn.dataset.email;
+                const phone = btn.dataset.phone;
+                const jabatan = btn.dataset.jabatan;
+                const schedule = btn.dataset.schedule;
+                const approver = btn.dataset.approver;
+
+                console.log('Mobile edit button clicked:', { id, nik, nama, email, phone, jabatan, schedule, approver });
+                editKaryawan(id, nik, nama, email, phone, jabatan, schedule, approver);
+            }
+
+            // Desktop reset button
+            if (e.target.closest('.reset-karyawan-btn')) {
+                e.preventDefault();
+                const btn = e.target.closest('.reset-karyawan-btn');
+                const id = btn.dataset.id;
+                const nama = btn.dataset.nama;
+                
+                console.log('Reset button clicked:', { id, nama });
+                resetKaryawan(id, nama);
+            }
+            
+            // Mobile reset button
+            if (e.target.closest('.reset-karyawan-btn-mobile')) {
+                e.preventDefault();
+                const btn = e.target.closest('.reset-karyawan-btn-mobile');
+                const id = btn.dataset.id;
+                const nama = btn.dataset.nama;
+                
+                console.log('Mobile reset button clicked:', { id, nama });
+                resetKaryawan(id, nama);
+            }
+        });
+
+        // Reset karyawan function
+        async function resetKaryawan(id, nama) {
+            console.log('resetKaryawan called with:', { id, nama });
+            
+            // Test route first
+            try {
+                console.log('Testing route connectivity...');
+                const testResponse = await fetch('/admin/karyawan/test-reset', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ test: true })
+                });
+                console.log('Test route status:', testResponse.status);
+                if (testResponse.ok) {
+                    const testResult = await testResponse.json();
+                    console.log('Test route result:', testResult);
+                } else {
+                    console.error('Test route failed:', testResponse.status);
+                }
+            } catch (testError) {
+                console.error('Test route error:', testError);
+            }
+            
+            const confirmed = await Notify.confirm({
+                title: `Reset karyawan "${nama}"?`,
+                message: 'Ini akan:\n• Menghapus email aktivasi\n• Menghapus PIN\n• Menghapus referensi wajah\n• Mengaktifkan ulang proses aktivasi akun\n\nData presensi tetap tersimpan.',
+                okText: 'Ya, Reset',
+                cancelText: 'Batal',
+                variant: 'warning',
+                icon: 'warning'
+            });
+
+            if (!confirmed) {
+                return;
+            }
+
+            try {
+                console.log('Sending reset request to /admin/karyawan/reset...');
+                console.log('Request body:', { id: id });
+                
+                const response = await fetch('/admin/karyawan/reset', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ id: id })
+                });
+
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+                
+                if (!response.ok) {
+                    console.error('HTTP error! status:', response.status);
+                    const errorText = await response.text();
+                    console.error('Error response:', errorText);
+                    throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+                }
+
+                const result = await response.json();
+                console.log('Reset result:', result);
+
+                if (result.success) {
+                    Notify.success('Karyawan berhasil direset. Email, PIN, dan referensi wajah sudah dihapus — karyawan perlu aktivasi ulang dari awal.');
+                    setTimeout(() => location.reload(), 1200);
+                } else {
+                    Notify.error(result.message || 'Gagal mereset karyawan');
+                }
+            } catch (error) {
+                console.error('Reset error:', error);
+                Notify.error('Terjadi kesalahan: ' + error.message);
+            }
+        }
+
+        // Close edit modal functions
+        function closeEditKaryawanModal() {
+            editModal.classList.add('hidden');
+            editModal.classList.remove('flex');
+        }
+
+        if (closeEditModal) {
+            closeEditModal.addEventListener('click', closeEditKaryawanModal);
+        }
+        
+        if (cancelEditBtn) {
+            cancelEditBtn.addEventListener('click', closeEditKaryawanModal);
+        }
+
+        // Close modal when clicking outside
+        if (editModal) {
+            editModal.addEventListener('click', function(e) {
+                if (e.target === editModal) {
+                    closeEditKaryawanModal();
+                }
+            });
+        }
+
+        // Handle edit form submission
+        if (editForm) {
+            editForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                console.log('Form submission started...');
+                
+                const formData = {
+                    id: document.getElementById('editKaryawanId').value,
+                    nik: document.getElementById('editNik').value.trim(),
+                    nama: document.getElementById('editNama').value.trim(),
+                    email: document.getElementById('editEmail').value.trim(),
+                    phone: document.getElementById('editPhone').value.trim(),
+                    id_jabatan: document.getElementById('editJabatan').value,
+                    id_jadwal_kerja: document.getElementById('editSchedule').value || null,
+                    can_approve_leave: document.getElementById('editCanApproveLeave').checked
+                };
+
+                console.log('Form data:', formData);
+
+                if (!formData.nik || !formData.nama || !formData.id_jabatan) {
+                    Notify.warning('NIK, Nama, dan Jabatan harus diisi!');
+                    return;
+                }
+
+                try {
+                    console.log('Sending update request...');
+                    const response = await fetch('/admin/karyawan/update', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(formData)
+                    });
+
+                    console.log('Response status:', response.status);
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    console.log('Update result:', result);
+
+                    if (result.success) {
+                        Notify.success('Karyawan berhasil diupdate!');
+                        closeEditKaryawanModal();
+                        setTimeout(() => location.reload(), 800);
+                    } else {
+                        Notify.error(result.message || 'Gagal memperbarui karyawan');
+                    }
+                } catch (error) {
+                    console.error('Update error:', error);
+                    Notify.error('Terjadi kesalahan: ' + error.message);
+                }
+            });
+        } else {
+            console.error('Edit form not found!');
+        }
+
+        // Pre-load jabatan and schedule options on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded, pre-loading options...');
+            loadJabatanOptions().then(() => {
+                console.log('Jabatan options pre-loaded successfully');
+            }).catch(error => {
+                console.error('Failed to pre-load jabatan options:', error);
+            });
+
+            loadScheduleOptions().then(() => {
+                console.log('Schedule options pre-loaded successfully');
+            }).catch(error => {
+                console.error('Failed to pre-load schedule options:', error);
+            });
+        });
+
+        // Intercept delete-karyawan forms with custom confirm dialog
+        document.addEventListener('submit', async function (event) {
+            const form = event.target.closest('form.js-delete-karyawan');
+            if (!form) return;
+            event.preventDefault();
+            const nama = form.dataset.nama || 'karyawan ini';
+            const ok = await Notify.confirm({
+                title: 'Hapus karyawan?',
+                message: `Yakin menghapus "${nama}"? Tindakan ini tidak bisa dibatalkan.`,
+                okText: 'Ya, Hapus',
+                cancelText: 'Batal',
+                variant: 'danger',
+                icon: 'danger'
+            });
+            if (ok) form.submit();
+        });
+    </script>
+
+    <%- include('../../partials/notify') %>
+</body>
+</html>

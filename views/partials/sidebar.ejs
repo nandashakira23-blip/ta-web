@@ -1,0 +1,111 @@
+<%
+const isManager = admin && admin.role === 'manager';
+const isAbsensiPage = currentPage === 'absensi' || currentPage === 'ketidakhadiran';
+
+const adminMenus = [
+    { href: '/admin/dashboard',        label: 'Dashboard',        icon: 'fa-tachometer-alt', match: 'dashboard' },
+    { href: '/admin/karyawan',         label: 'Karyawan',         icon: 'fa-users',          match: 'karyawan' },
+    { href: '/admin/jabatan',          label: 'Jabatan',          icon: 'fa-briefcase',      match: 'jabatan' },
+    { href: '/admin/shift',            label: 'Shift',            icon: 'fa-business-time',  match: 'shift' },
+    { href: '/admin/work-schedule',    label: 'Jadwal',           icon: 'fa-clock',          match: 'work-schedule' },
+    { href: '/admin/manager-accounts', label: 'Akun',             icon: 'fa-user-shield',    match: 'manager-accounts' },
+    { href: '/admin/presensi',         label: 'Presensi',         icon: 'fa-calendar-check', match: 'presensi' },
+    { href: '/admin/absensi',          label: 'Absensi',          icon: 'fa-file-medical',   match: ['absensi', 'ketidakhadiran'] },
+    { href: '/admin/laporan',          label: 'Laporan',          icon: 'fa-chart-line',     match: 'laporan' },
+    { href: '/admin/setting',          label: 'Pengaturan Lokasi', icon: 'fa-map-marker-alt', match: 'setting' },
+];
+
+const managerMenus = [
+    { href: '/admin/manager-dashboard', label: 'Dashboard Tim', icon: 'fa-chart-pie',     match: 'manager-dashboard' },
+    { href: '/admin/presensi',          label: 'Presensi',      icon: 'fa-calendar-check', match: 'presensi' },
+    { href: '/admin/absensi',           label: 'Absensi',       icon: 'fa-file-medical',  match: ['absensi', 'ketidakhadiran'] },
+    { href: '/admin/laporan',           label: 'Laporan',       icon: 'fa-chart-line',    match: 'laporan' },
+];
+
+const menus = isManager ? managerMenus : adminMenus;
+
+const isMenuActive = (match) => Array.isArray(match)
+    ? match.includes(currentPage)
+    : currentPage === match;
+%>
+<!-- Desktop Sidebar -->
+<div id="sidebar" class="w-full lg:w-64 bg-dark-800 shadow-2xl min-h-screen fixed lg:fixed top-20 sm:top-24 lg:top-20 left-0 z-30 hidden lg:block border-r border-brown-600/30">
+    <div class="p-4 h-screen overflow-y-auto pt-6">
+        <ul class="space-y-1">
+            <% menus.forEach((m) => { const active = isMenuActive(m.match); %>
+                <li>
+                    <a href="<%= m.href %>" class="flex items-center space-x-3 text-brown-200 p-3 rounded-xl <%= active ? 'bg-brown-600 border-l-4 border-brown-400 font-semibold text-white shadow-lg' : 'hover:bg-dark-600 hover:text-white' %> transition duration-200 group">
+                        <i class="fas <%= m.icon %> <%= active ? 'text-brown-200' : 'text-brown-400 group-hover:text-brown-300' %>"></i>
+                        <span><%= m.label %></span>
+                    </a>
+                </li>
+            <% }) %>
+        </ul>
+    </div>
+</div>
+
+<!-- Mobile Sidebar Overlay -->
+<div id="mobile-sidebar" class="fixed inset-0 z-50 lg:hidden hidden">
+    <div class="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm" id="sidebar-overlay"></div>
+    <div class="fixed left-0 top-0 h-full w-72 bg-dark-800 shadow-2xl transform -translate-x-full transition-transform duration-300 ease-in-out border-r border-brown-600/30" id="sidebar-content">
+        <div class="p-6">
+            <div class="flex justify-between items-center mb-6">
+                <div class="flex items-center space-x-3">
+                    <div class="w-8 h-8 flex items-center justify-center">
+                        <svg class="w-6 h-6 text-brown-400" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+                            <path d="M12.5 7H11v6l5.25 3.15.75-1.23-4.5-2.67V7z"/>
+                        </svg>
+                    </div>
+                    <h2 class="text-xl font-bold text-white">Menu</h2>
+                </div>
+                <button id="close-sidebar" class="text-brown-300 hover:text-white p-2 rounded-lg hover:bg-dark-600 transition duration-200">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <ul class="space-y-1">
+                <% menus.forEach((m) => { const active = isMenuActive(m.match); %>
+                    <li>
+                        <a href="<%= m.href %>" class="flex items-center space-x-3 text-brown-200 p-4 rounded-xl <%= active ? 'bg-brown-600 border-l-4 border-brown-400 font-semibold text-white shadow-lg' : 'hover:bg-dark-600 hover:text-white' %> transition duration-200">
+                            <i class="fas <%= m.icon %> <%= active ? 'text-brown-200' : 'text-brown-400' %>"></i>
+                            <span><%= m.label %></span>
+                        </a>
+                    </li>
+                <% }) %>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Mobile menu functionality
+    const mobileMenuButton = document.getElementById('mobile-menu-button');
+    const mobileSidebar = document.getElementById('mobile-sidebar');
+    const sidebarContent = document.getElementById('sidebar-content');
+    const sidebarOverlay = document.getElementById('sidebar-overlay');
+    const closeSidebar = document.getElementById('close-sidebar');
+
+    function openMobileSidebar() {
+        mobileSidebar.classList.remove('hidden');
+        setTimeout(() => {
+            sidebarContent.classList.remove('-translate-x-full');
+        }, 10);
+    }
+
+    function closeMobileSidebar() {
+        sidebarContent.classList.add('-translate-x-full');
+        setTimeout(() => {
+            mobileSidebar.classList.add('hidden');
+        }, 300);
+    }
+
+    if (mobileMenuButton) {
+        mobileMenuButton.addEventListener('click', openMobileSidebar);
+    }
+    if (closeSidebar) {
+        closeSidebar.addEventListener('click', closeMobileSidebar);
+    }
+    if (sidebarOverlay) {
+        sidebarOverlay.addEventListener('click', closeMobileSidebar);
+    }
+</script>

@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/css/tailwind.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-dark-900 min-h-screen" style="background:#1a1d20;">
+    <%
+        const q = (filters && filters.q) ? filters.q : '';
+        const pageInfo = pagination || { page: 1, totalPages: 1, hasPrev: false, hasNext: false, prevPage: 1, nextPage: 1, startItem: 0, endItem: 0, totalItems: 0 };
+        const queryQ = q ? `&q=${encodeURIComponent(q)}` : '';
+    %>
+    <%- include('../../partials/navbar') %>
+    <div class="pt-20">
+        <div class="flex flex-col lg:flex-row">
+            <%- include('../../partials/sidebar', { currentPage: 'manager-accounts', admin: admin }) %>
+
+            <div class="flex-1 lg:ml-64 p-4 sm:p-6 lg:p-8">
+                <div class="mb-6">
+                    <h1 class="text-3xl font-bold text-white">Akun Manager</h1>
+                    <p class="text-brown-300">Kelola akun login manager untuk approval di web.</p>
+                </div>
+
+                <% if (messages.success && messages.success.length > 0) { %>
+                    <% messages.success.forEach(msg => { %>
+                        <div class="mb-4 rounded-lg border border-green-700 bg-green-900/60 px-4 py-3 text-green-200"><%= msg %></div>
+                    <% }) %>
+                <% } %>
+                <% if (messages.error && messages.error.length > 0) { %>
+                    <% messages.error.forEach(msg => { %>
+                        <div class="mb-4 rounded-lg border border-red-700 bg-red-900/60 px-4 py-3 text-red-200"><%= msg %></div>
+                    <% }) %>
+                <% } %>
+
+                <div class="mb-6 rounded-xl border border-brown-700/40 bg-dark-800 p-4 sm:p-6">
+                    <h2 class="text-lg font-semibold text-white mb-4">Tambah Akun Manager</h2>
+                    <form action="/admin/manager-accounts/add" method="POST" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm text-brown-300 mb-2">Username</label>
+                            <input type="text" name="username" required class="w-full rounded-lg border border-brown-700/40 bg-dark-700 px-3 py-2 text-white" />
+                        </div>
+                        <div>
+                            <label class="block text-sm text-brown-300 mb-2">Password</label>
+                            <input type="password" name="password" required class="w-full rounded-lg border border-brown-700/40 bg-dark-700 px-3 py-2 text-white" />
+                        </div>
+                        <div class="flex items-end">
+                            <button type="submit" class="rounded-lg bg-brown-600 px-5 py-2 text-white hover:bg-brown-500">
+                                <i class="fas fa-plus mr-2"></i>Buat Akun
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <form method="GET" action="/admin/manager-accounts" class="mb-4 flex flex-col gap-2 sm:flex-row">
+                    <input
+                        type="text"
+                        name="q"
+                        value="<%= q %>"
+                        placeholder="Cari username..."
+                        class="w-full rounded-lg border border-brown-700/40 bg-dark-700 px-3 py-2 text-white sm:max-w-sm" />
+                    <button type="submit" class="rounded-lg bg-brown-600 px-4 py-2 text-white hover:bg-brown-500">Cari</button>
+                    <% if (q) { %>
+                        <a href="/admin/manager-accounts" class="rounded-lg border border-brown-700/40 px-4 py-2 text-brown-200 hover:bg-dark-700">Reset</a>
+                    <% } %>
+                </form>
+
+                <div class="overflow-hidden rounded-xl border border-brown-700/40 bg-dark-800">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-brown-700/40">
+                            <thead class="bg-dark-700 text-brown-200 text-xs uppercase">
+                                <tr>
+                                    <th class="px-4 py-3 text-left">Username</th>
+                                    <th class="px-4 py-3 text-left">Dibuat</th>
+                                    <th class="px-4 py-3 text-left">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-brown-700/30 text-sm text-brown-100">
+                                <% if (!accounts || accounts.length === 0) { %>
+                                    <tr><td colspan="3" class="px-4 py-8 text-center text-brown-300">Belum ada akun manager</td></tr>
+                                <% } %>
+                                <% (accounts || []).forEach(acc => { %>
+                                    <tr class="hover:bg-dark-700/50">
+                                        <td class="px-4 py-3 font-semibold text-white"><%= acc.username %></td>
+                                        <td class="px-4 py-3 text-xs text-brown-300"><%= acc.created_at ? new Date(acc.created_at).toLocaleString('id-ID') : '-' %></td>
+                                        <td class="px-4 py-3">
+                                            <div class="flex flex-wrap gap-2">
+                                                <button
+                                                    type="button"
+                                                    class="rounded bg-blue-700 px-3 py-1 text-xs text-white hover:bg-blue-600"
+                                                    onclick="openResetModal('<%= acc.id %>', '<%= acc.username %>')">
+                                                    Reset Password
+                                                </button>
+                                                <form action="/admin/manager-accounts/<%= acc.id %>/delete" method="POST" class="js-confirm-delete-mgr" data-username="<%= acc.username %>">
+                                                    <button type="submit" class="rounded bg-red-700 px-3 py-1 text-xs text-white hover:bg-red-600">
+                                                        Hapus
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                <% }) %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="mt-4 flex flex-col gap-2 text-sm text-brown-300 sm:flex-row sm:items-center sm:justify-between">
+                    <div>Menampilkan <%= pageInfo.startItem %>-<%= pageInfo.endItem %> dari <%= pageInfo.totalItems %> data</div>
+                    <div class="flex items-center gap-2">
+                        <a href="/admin/manager-accounts?page=<%= pageInfo.prevPage %><%= queryQ %>" class="rounded border border-brown-700/40 px-3 py-1 <%= pageInfo.hasPrev ? 'text-brown-200 hover:bg-dark-700' : 'pointer-events-none opacity-40 text-brown-500' %>">Prev</a>
+                        <span class="text-brown-200">Hal <%= pageInfo.page %>/<%= pageInfo.totalPages %></span>
+                        <a href="/admin/manager-accounts?page=<%= pageInfo.nextPage %><%= queryQ %>" class="rounded border border-brown-700/40 px-3 py-1 <%= pageInfo.hasNext ? 'text-brown-200 hover:bg-dark-700' : 'pointer-events-none opacity-40 text-brown-500' %>">Next</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="reset-modal" class="fixed inset-0 z-50 hidden">
+        <div class="absolute inset-0 bg-black/70" onclick="closeResetModal()"></div>
+        <div class="relative mx-auto mt-24 w-full max-w-md rounded-xl border border-brown-700/40 bg-dark-800 p-6 shadow-2xl">
+            <div class="mb-4 flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-white">Reset Password Manager</h3>
+                <button type="button" class="text-brown-300 hover:text-white" onclick="closeResetModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <p class="mb-4 text-sm text-brown-300">Username: <span id="reset-username" class="font-semibold text-white">-</span></p>
+            <form id="reset-form" method="POST" class="space-y-4">
+                <div>
+                    <label class="mb-2 block text-sm text-brown-300">Password Baru</label>
+                    <input
+                        id="reset-password-input"
+                        type="password"
+                        name="new_password"
+                        minlength="4"
+                        required
+                        class="w-full rounded-lg border border-brown-700/40 bg-dark-700 px-3 py-2 text-white"
+                        placeholder="Masukkan password baru" />
+                </div>
+                <div class="flex justify-end gap-2">
+                    <button type="button" onclick="closeResetModal()" class="rounded border border-brown-700/40 px-4 py-2 text-sm text-brown-200 hover:bg-dark-700">Batal</button>
+                    <button type="submit" class="rounded bg-blue-700 px-4 py-2 text-sm text-white hover:bg-blue-600">Simpan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function openResetModal(accountId, username) {
+            const modal = document.getElementById('reset-modal');
+            const form = document.getElementById('reset-form');
+            const userEl = document.getElementById('reset-username');
+            const input = document.getElementById('reset-password-input');
+
+            form.action = `/admin/manager-accounts/${accountId}/reset-password`;
+            userEl.textContent = username || '-';
+            input.value = '';
+            modal.classList.remove('hidden');
+            setTimeout(() => input.focus(), 50);
+        }
+
+        function closeResetModal() {
+            const modal = document.getElementById('reset-modal');
+            modal.classList.add('hidden');
+        }
+
+        document.addEventListener('submit', async function (event) {
+            const form = event.target.closest('form.js-confirm-delete-mgr');
+            if (!form) return;
+            event.preventDefault();
+            const ok = await Notify.confirm({
+                title: `Hapus akun manager "${form.dataset.username || ''}"?`,
+                message: 'Tindakan ini tidak bisa dibatalkan.',
+                okText: 'Ya, Hapus',
+                cancelText: 'Batal',
+                variant: 'danger',
+                icon: 'danger'
+            });
+            if (ok) form.submit();
+        });
+    </script>
+
+    <%- include('../../partials/notify') %>
+</body>
+</html>

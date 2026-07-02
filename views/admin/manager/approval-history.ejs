@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %></title>
+    <link rel="stylesheet" href="/css/tailwind.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-dark-900 min-h-screen" style="background:#1a1d20;">
+    <%
+        const q = (filters && filters.q) ? filters.q : '';
+        const pageInfo = pagination || { page: 1, totalPages: 1, hasPrev: false, hasNext: false, prevPage: 1, nextPage: 1, startItem: 0, endItem: 0, totalItems: 0 };
+        const queryQ = q ? `&q=${encodeURIComponent(q)}` : '';
+    %>
+    <%- include('../../partials/navbar') %>
+    <div class="pt-20">
+        <div class="flex flex-col lg:flex-row">
+            <%- include('../../partials/sidebar', { currentPage: 'approval-history', admin: admin }) %>
+            <div class="flex-1 lg:ml-64 p-4 sm:p-6 lg:p-8">
+                <div class="mb-6">
+                    <h1 class="text-3xl font-bold text-white">Riwayat Approval</h1>
+                    <p class="text-brown-300">Lihat siapa approve apa dan kapan dilakukan.</p>
+                </div>
+
+                <% if (messages.success && messages.success.length) { %>
+                    <% messages.success.forEach(msg => { %><div class="mb-4 rounded-lg border border-green-700 bg-green-900/60 px-4 py-3 text-green-200"><%= msg %></div><% }) %>
+                <% } %>
+                <% if (messages.error && messages.error.length) { %>
+                    <% messages.error.forEach(msg => { %><div class="mb-4 rounded-lg border border-red-700 bg-red-900/60 px-4 py-3 text-red-200"><%= msg %></div><% }) %>
+                <% } %>
+
+                <form method="GET" action="/admin/approval-history" class="mb-4 flex flex-col gap-2 sm:flex-row">
+                    <input
+                        type="text"
+                        name="q"
+                        value="<%= q %>"
+                        placeholder="Cari karyawan/NIK/approver/action/ID request..."
+                        class="w-full rounded-lg border border-brown-700/40 bg-dark-700 px-3 py-2 text-white sm:max-w-sm" />
+                    <button type="submit" class="rounded-lg bg-brown-600 px-4 py-2 text-white hover:bg-brown-500">Cari</button>
+                    <% if (q) { %>
+                        <a href="/admin/approval-history" class="rounded-lg border border-brown-700/40 px-4 py-2 text-brown-200 hover:bg-dark-700">Reset</a>
+                    <% } %>
+                </form>
+
+                <div class="overflow-hidden rounded-xl border border-brown-700/40 bg-dark-800">
+                    <table class="min-w-full divide-y divide-brown-700/40">
+                        <thead class="bg-dark-700 text-brown-200 text-xs uppercase">
+                            <tr>
+                                <th class="px-4 py-3 text-left">Waktu</th>
+                                <th class="px-4 py-3 text-left">Karyawan</th>
+                                <th class="px-4 py-3 text-left">Request</th>
+                                <th class="px-4 py-3 text-left">Aksi</th>
+                                <th class="px-4 py-3 text-left">Approver</th>
+                                <th class="px-4 py-3 text-left">Catatan</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-brown-700/30 text-brown-100">
+                            <% if (!history || history.length === 0) { %>
+                                <tr><td colspan="6" class="px-4 py-10 text-center text-brown-300">Belum ada riwayat approval.</td></tr>
+                            <% } %>
+                            <% (history || []).forEach(item => { %>
+                                <tr class="hover:bg-dark-700/40 align-top">
+                                    <td class="px-4 py-3"><%= item.created_at %></td>
+                                    <td class="px-4 py-3">
+                                        <div class="font-semibold text-white"><%= item.nama_karyawan %></div>
+                                        <div class="text-xs text-brown-300">NIK <%= item.nik %></div>
+                                    </td>
+                                    <td class="px-4 py-3">#<%= item.leave_request_id %> (<span class="capitalize"><%= item.jenis %> / <%= item.kategori %></span>)</td>
+                                    <td class="px-4 py-3">
+                                        <span class="rounded-full px-3 py-1 text-xs <%= item.action === 'approved' ? 'bg-green-900/60 text-green-200' : 'bg-red-900/60 text-red-200' %>"><%= item.action %></span>
+                                    </td>
+                                    <td class="px-4 py-3"><%= item.approver_name || 'Admin' %></td>
+                                    <td class="px-4 py-3"><%= item.notes || '-' %></td>
+                                </tr>
+                            <% }) %>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="mt-4 flex flex-col gap-2 text-sm text-brown-300 sm:flex-row sm:items-center sm:justify-between">
+                    <div>Menampilkan <%= pageInfo.startItem %>-<%= pageInfo.endItem %> dari <%= pageInfo.totalItems %> data</div>
+                    <div class="flex items-center gap-2">
+                        <a href="/admin/approval-history?page=<%= pageInfo.prevPage %><%= queryQ %>" class="rounded border border-brown-700/40 px-3 py-1 <%= pageInfo.hasPrev ? 'text-brown-200 hover:bg-dark-700' : 'pointer-events-none opacity-40 text-brown-500' %>">Prev</a>
+                        <span class="text-brown-200">Hal <%= pageInfo.page %>/<%= pageInfo.totalPages %></span>
+                        <a href="/admin/approval-history?page=<%= pageInfo.nextPage %><%= queryQ %>" class="rounded border border-brown-700/40 px-3 py-1 <%= pageInfo.hasNext ? 'text-brown-200 hover:bg-dark-700' : 'pointer-events-none opacity-40 text-brown-500' %>">Next</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
