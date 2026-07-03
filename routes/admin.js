@@ -919,74 +919,108 @@ router.post('/karyawan/reset', requireAuth, async (req, res) => {
     }
     
     try {
-        // Ambil data karyawan dulu untuk mendapatkan path foto
-        const getQuery = 'SELECT profile_picture AS foto_referensi FROM karyawan WHERE id = ? AND deleted_at IS NULL';
-        const karyawan = await db.query(getQuery, [id]);
-        
-        if (!karyawan || karyawan.length === 0) {
+        // Pastikan karyawan ada
+        const karyawanRows = await db.query(
+            'SELECT id, profile_picture FROM karyawan WHERE id = ? AND deleted_at IS NULL',
+            [id]
+        );
+
+        if (!karyawanRows || karyawanRows.length === 0) {
             return res.json({ success: false, message: 'Karyawan tidak ditemukan' });
         }
-        
-        const fotoPath = karyawan[0].foto_referensi;
-        
-        // Hapus file foto fisik atau Blob jika ada
-        if (fotoPath && isRemoteFileUrl(fotoPath)) {
-            await deleteStoredFile(fotoPath);
-        } else if (fotoPath) {
-            // Coba beberapa kemungkinan path
-            const possiblePaths = [
-                path.join(__dirname, '..', 'public', fotoPath), // Jika path lengkap dari public
-                path.join(__dirname, '..', 'public', 'uploads', 'karyawan', fotoPath), // Jika hanya nama file
-                path.join(__dirname, '..', 'public', 'uploads', 'profiles', fotoPath) // Jika di folder profiles
-            ];
-            
-            let deleted = false;
-            for (const fullPath of possiblePaths) {
-                if (fs.existsSync(fullPath)) {
-                    try {
-                        fs.unlinkSync(fullPath);
-                        console.log(`✅ Foto berhasil dihapus: ${fullPath}`);
-                        deleted = true;
-                        break;
-                    } catch (err) {
-                        console.error(`❌ Gagal menghapus foto: ${err.message}`);
-                    }
-                }
+
+        // === Kumpulkan SEMUA path foto milik karyawan ini ===
+        const photoPaths = new Set();
+
+        // 1) Foto profil
+        if (karyawanRows[0].profile_picture) {
+            photoPaths.add(karyawanRows[0].profile_picture);
+        }
+
+        // 2) Foto referensi wajah (enrollment)
+        const faceRows = await db.query(
+            'SELECT photo_path FROM karyawan_face_reference WHERE id_karyawan = ?',
+            [id]
+        );
+        for (const row of faceRows) {
+            if (row.photo_path) photoPaths.add(row.photo_path);
+        }
+
+        // 3) Foto absensi (check-in / check-out) dari kolom JSON presensi
+        const presensiRows = await db.query(
+            `SELECT
+                JSON_UNQUOTE(JSON_EXTRACT(data_masuk, '$.foto'))  AS foto_masuk,
+                JSON_UNQUOTE(JSON_EXTRACT(data_keluar, '$.foto')) AS foto_keluar
+             FROM presensi
+             WHERE id_karyawan = ?`,
+            [id]
+        );
+        for (const row of presensiRows) {
+            if (row.foto_masuk && row.foto_masuk !== 'null') photoPaths.add(row.foto_masuk);
+            if (row.foto_keluar && row.foto_keluar !== 'null') photoPaths.add(row.foto_keluar);
+        }
+
+        // 4) Foto percobaan wajah GAGAL (kolom JSON karyawan.data_percobaan_gagal)
+        try {
+            const gagalRows = await db.query('SELECT data_percobaan_gagal FROM karyawan WHERE id = ?', [id]);
+            let arr = (gagalRows && gagalRows[0]) ? gagalRows[0].data_percobaan_gagal : null;
+            if (typeof arr === 'string') { try { arr = JSON.parse(arr || '[]'); } catch (e) { arr = []; } }
+            if (Array.isArray(arr)) {
+                for (const a of arr) { if (a && a.foto) photoPaths.add(a.foto); }
             }
-            
-            if (!deleted) {
-                console.log(`⚠️ File foto tidak ditemukan: ${fotoPath}`);
+        } catch (e) {
+            console.warn('[RESET] lewati data_percobaan_gagal:', e.message);
+        }
+
+        // === Hapus semua file fisik / Blob ===
+        let deletedCount = 0;
+        for (const p of photoPaths) {
+            try {
+                const removed = await deleteStoredFile(p);
+                if (removed) {
+                    deletedCount++;
+                } else {
+                    console.log(`⚠️ File foto tidak ditemukan: ${p}`);
+                }
+            } catch (fileErr) {
+                console.error(`❌ Gagal menghapus foto ${p}: ${fileErr.message}`);
             }
         }
-        
-        // Reset karyawan: hapus data aktivasi termasuk email
-        // Data absensi tetap tersimpan
-        await db.query('UPDATE karyawan_face_reference SET is_active = FALSE WHERE id_karyawan = ?', [id]);
+        console.log(`🧹 Reset karyawan ${id}: ${deletedCount}/${photoPaths.size} file foto dihapus dari storage`);
 
-        const updateEmployeeQuery = `
-            UPDATE karyawan
-            SET email = NULL,
-                status = 'draft',
-                profile_picture = NULL
-            WHERE id = ? AND deleted_at IS NULL
-        `;
-        await db.query(updateEmployeeQuery, [id]);
+        // === Bersihkan DB ===
+        // Hapus baris referensi wajah (bukan sekadar nonaktif) supaya storage & DB benar-benar bersih
+        await db.query('DELETE FROM karyawan_face_reference WHERE id_karyawan = ?', [id]);
 
-        const updateSecurityQuery = `
-            UPDATE karyawan
-            SET pin_hash = NULL,
-                face_enrollment_completed = FALSE,
-                email_verified_at = NULL,
-                email_verification_token = NULL,
-                email_verification_expires_at = NULL,
-                email_verification_sent_at = NULL
-            WHERE id = ? AND deleted_at IS NULL
-        `;
-        await db.query(updateSecurityQuery, [id]);
-        
-        res.json({ 
-            success: true, 
-            message: 'Karyawan berhasil direset. Email, PIN, dan referensi wajah sudah dihapus untuk aktivasi ulang.' 
+        // Buang field foto dari record presensi (record absensi tetap ada, tapi tanpa foto)
+        await db.query(
+            `UPDATE presensi
+             SET data_masuk  = JSON_REMOVE(data_masuk, '$.foto'),
+                 data_keluar = JSON_REMOVE(data_keluar, '$.foto')
+             WHERE id_karyawan = ?`,
+            [id]
+        );
+
+        // Reset data aktivasi karyawan (email, PIN, status, verifikasi email)
+        await db.query(
+            `UPDATE karyawan
+             SET email = NULL,
+                 status = 'draft',
+                 profile_picture = NULL,
+                 pin_hash = NULL,
+                 face_enrollment_completed = FALSE,
+                 data_percobaan_gagal = NULL,
+                 email_verified_at = NULL,
+                 email_verification_token = NULL,
+                 email_verification_expires_at = NULL,
+                 email_verification_sent_at = NULL
+             WHERE id = ? AND deleted_at IS NULL`,
+            [id]
+        );
+
+        res.json({
+            success: true,
+            message: `Karyawan berhasil direset. ${deletedCount} foto (referensi wajah, profil, absensi) dihapus dari storage. Email, PIN, dan referensi wajah dibersihkan untuk aktivasi ulang.`
         });
     } catch (err) {
         console.error('Error reset karyawan:', err);
@@ -3393,42 +3427,84 @@ router.post(['/ketidakhadiran/:id/reject', '/absensi/:id/reject'], requireAuth, 
 // wajah yang dipakai pembanding + info encoding). Tanpa migrasi/tabel baru. Filter, pilih,
 // hapus, dan export Excel dilakukan di sisi klien (browser). Halaman berdiri sendiri —
 // tidak mengubah tampilan/menu yang sudah ada. Data hanya ditampilkan, tidak diubah.
-router.get('/testing', requireAuth, requireSuperAdmin, (req, res) => {
-    // Data pengujian = kejadian ABSEN (foto probe + hasil pencocokan encoding) dari tabel presensi.
-    const sql = `
-        SELECT p.id,
-               DATE_FORMAT(p.tanggal, '%d-%m-%Y') AS tgl,
-               TIME_FORMAT(p.jam_masuk, '%H:%i') AS jam_masuk,
-               TIME_FORMAT(p.jam_keluar, '%H:%i') AS jam_keluar,
-               p.data_masuk, p.data_keluar, k.nik, k.nama
-        FROM presensi p
-        LEFT JOIN karyawan k ON k.id = p.id_karyawan
-        ORDER BY p.tanggal DESC, p.id DESC`;
-    db.query(sql, (err, results) => {
-        if (err) {
-            console.error('Testing query error:', err);
-            return res.status(500).send('Gagal memuat data pengujian');
-        }
+router.get('/testing', requireAuth, requireSuperAdmin, async (req, res) => {
+    // Data pengujian = absen BERHASIL (presensi) + percobaan GAGAL (face_attempt_log).
+    try {
         const parse = (v) => { try { return typeof v === 'string' ? JSON.parse(v || '{}') : (v || {}); } catch (e) { return {}; } };
         const events = [];
-        (results || []).forEach((p) => {
+
+        // 1) Absen BERHASIL (foto probe + kemiripan) dari presensi
+        const presensiRows = await db.query(`
+            SELECT p.id,
+                   DATE_FORMAT(p.tanggal, '%d-%m-%Y') AS tgl,
+                   DATE_FORMAT(p.tanggal, '%Y-%m-%d') AS tgl_iso,
+                   TIME_FORMAT(p.jam_masuk, '%H:%i') AS jam_masuk,
+                   TIME_FORMAT(p.jam_keluar, '%H:%i') AS jam_keluar,
+                   p.data_masuk, p.data_keluar, k.nik, k.nama
+            FROM presensi p
+            LEFT JOIN karyawan k ON k.id = p.id_karyawan
+            ORDER BY p.tanggal DESC, p.id DESC`, []);
+        (presensiRows || []).forEach((p) => {
             const dm = parse(p.data_masuk), dk = parse(p.data_keluar);
             if (dm && dm.foto) events.push({
-                pid: p.id, type: 'masuk', nik: p.nik || '-', nama: p.nama || '-',
-                tgl: p.tgl || '-', jam: p.jam_masuk || '-',
-                similarity: dm.face_similarity, jarak: dm.jarak_meter
+                source: 'presensi', pid: p.id, type: 'masuk', jenisLabel: 'Check-in',
+                nik: p.nik || '-', nama: p.nama || '-', tgl: p.tgl || '-', jam: p.jam_masuk || '-',
+                sortKey: (p.tgl_iso || '') + ' ' + (p.jam_masuk || '00:00'),
+                hasil: 'berhasil', similarity: dm.face_similarity, jarak: dm.jarak_meter,
+                keterangan: 'Cocok dengan referensi'
             });
             if (dk && dk.foto) events.push({
-                pid: p.id, type: 'keluar', nik: p.nik || '-', nama: p.nama || '-',
-                tgl: p.tgl || '-', jam: p.jam_keluar || '-',
-                similarity: dk.face_similarity, jarak: dk.jarak_meter
+                source: 'presensi', pid: p.id, type: 'keluar', jenisLabel: 'Check-out',
+                nik: p.nik || '-', nama: p.nama || '-', tgl: p.tgl || '-', jam: p.jam_keluar || '-',
+                sortKey: (p.tgl_iso || '') + ' ' + (p.jam_keluar || '00:00'),
+                hasil: 'berhasil', similarity: dk.face_similarity, jarak: dk.jarak_meter,
+                keterangan: 'Cocok dengan referensi'
             });
         });
+
+        // 2) Percobaan GAGAL dari kolom JSON karyawan.data_percobaan_gagal
+        let karyawanGagal = [];
+        try {
+            karyawanGagal = await db.query(
+                `SELECT id, nik, nama, data_percobaan_gagal
+                 FROM karyawan
+                 WHERE data_percobaan_gagal IS NOT NULL`, []);
+        } catch (e) {
+            console.warn('kolom data_percobaan_gagal belum tersedia:', e.message);
+        }
+        const jenisLabelMap = { masuk: 'Check-in', keluar: 'Check-out', istirahat: 'Selesai istirahat' };
+        (karyawanGagal || []).forEach((k) => {
+            const arr = parse(k.data_percobaan_gagal);
+            const list = Array.isArray(arr) ? arr : [];
+            list.forEach((a, idx) => {
+                const waktu = String(a.waktu || '');            // 'YYYY-MM-DD HH:MM:SS'
+                const tglIso = waktu.slice(0, 10);
+                const jam = waktu.slice(11, 16);
+                const p = tglIso.split('-');
+                const tgl = (p.length === 3) ? (p[2] + '-' + p[1] + '-' + p[0]) : (tglIso || '-');
+                events.push({
+                    source: 'attempt', kid: k.id, idx: idx, jenis: a.jenis, failType: a.status,
+                    jenisLabel: jenisLabelMap[a.jenis] || a.jenis,
+                    nik: k.nik || '-', nama: k.nama || '(tidak dikenal)',
+                    tgl: tgl || '-', jam: jam || '-',
+                    sortKey: (tglIso || '') + ' ' + (jam || '00:00'),
+                    hasil: 'gagal', similarity: a.similarity, jarak: null,
+                    hasPhoto: Boolean(a.foto), keterangan: a.keterangan || 'Gagal'
+                });
+            });
+        });
+
+        // Gabungkan, urutkan waktu terbaru dulu
+        events.sort((x, y) => String(y.sortKey || '').localeCompare(String(x.sortKey || '')));
+
         res.render('admin/testing', {
             title: 'Data Pengujian Face Recognition - Fleur Atelier',
             events
         });
-    });
+    } catch (err) {
+        console.error('Testing query error:', err);
+        return res.status(500).send('Gagal memuat data pengujian');
+    }
 });
 
 // Thumbnail wajah dari FOTO ABSEN (probe): pakai detektor wajah CNN (face-api) yang sama
@@ -3495,6 +3571,77 @@ router.get('/testing/probe/:pid/:type', requireAuth, requireSuperAdmin, (req, re
             return res.sendFile(src);
         }
     });
+});
+
+// Thumbnail FOTO PERCOBAAN GAGAL (face_attempt_log): kotak MERAH kalau wajah beda (no_match),
+// atau tampil apa adanya kalau tak ada wajah (no_face). Cache di faces-crop.
+router.get('/testing/attempt/:kid/:idx', requireAuth, requireSuperAdmin, async (req, res) => {
+    const sharp = require('sharp');
+    const kid = parseInt(req.params.kid, 10);
+    const idx = parseInt(req.params.idx, 10);
+    if (!kid || Number.isNaN(idx)) return res.status(400).end();
+    let rows;
+    try { rows = await db.query('SELECT data_percobaan_gagal FROM karyawan WHERE id = ?', [kid]); }
+    catch (e) { return res.status(404).end(); }
+    if (!rows || !rows.length) return res.status(404).end();
+    let arr = rows[0].data_percobaan_gagal;
+    if (typeof arr === 'string') { try { arr = JSON.parse(arr || '[]'); } catch (e) { arr = []; } }
+    if (!Array.isArray(arr) || !arr[idx]) return res.status(404).end();
+    const status = arr[idx].status;
+    const photoPath = arr[idx].foto;
+    if (!photoPath) return res.status(404).end();
+    if (/^https?:\/\//.test(photoPath)) return res.redirect(photoPath);
+    const src = [path.join(__dirname, '..', 'public', photoPath), path.join(__dirname, '..', photoPath)]
+        .find(p => fs.existsSync(p));
+    if (!src) return res.status(404).end();
+    const cacheDir = path.join(__dirname, '..', 'public', 'uploads', 'faces-crop');
+    const cacheFile = path.join(cacheDir, 'attempt-' + kid + '-' + idx + '-hd.jpg');
+    try {
+        if (fs.existsSync(cacheFile)) return res.sendFile(cacheFile);
+        if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
+
+        let out = null;
+        if (status === 'no_match') {
+            // Wajah terdeteksi tapi beda orang -> crop wajah + KOTAK MERAH
+            try {
+                const { detectFaces } = require('../utils/face-recognition');
+                const { createCanvas, loadImage } = require('canvas');
+                const faces = await detectFaces(src);
+                if (faces && faces.length && faces[0].box) {
+                    const box = faces[0].box;
+                    const orientedBuf = await sharp(src).rotate().toBuffer();
+                    const img = await loadImage(orientedBuf);
+                    const cx = (box.xMin + box.xMax) / 2, cy = (box.yMin + box.yMax) / 2;
+                    let side = Math.round(Math.max(box.width, box.height) * 1.35);
+                    side = Math.max(1, Math.min(side, img.width, img.height));
+                    const left = Math.max(0, Math.min(Math.round(cx - side / 2), img.width - side));
+                    const top = Math.max(0, Math.min(Math.round(cy - side / 2), img.height - side));
+                    const canvas = createCanvas(side, side);
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, left, top, side, side, 0, 0, side, side);
+                    ctx.strokeStyle = '#ef4444'; // MERAH = tidak cocok / orang lain
+                    ctx.lineWidth = Math.max(3, Math.round(side * 0.012));
+                    ctx.strokeRect(box.xMin - left, box.yMin - top, box.width, box.height);
+                    const drawn = canvas.toBuffer('image/jpeg', { quality: 0.92 });
+                    const target = Math.min(side, 512);
+                    out = await sharp(drawn).resize(target, target, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 92 }).toBuffer();
+                }
+            } catch (e) {
+                console.warn('attempt no_match draw gagal, tampil apa adanya:', e.message);
+            }
+        }
+        if (!out) {
+            // no_face / fallback: tampilkan APA ADANYA (tanpa kotak)
+            out = await sharp(src).rotate().resize(480, 480, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 90 }).toBuffer();
+        }
+        fs.writeFileSync(cacheFile, out);
+        res.setHeader('Content-Type', 'image/jpeg');
+        res.setHeader('Cache-Control', 'no-store');
+        return res.send(out);
+    } catch (e) {
+        console.error('Attempt crop error:', e.message);
+        return res.sendFile(src);
+    }
 });
 
 module.exports = router;

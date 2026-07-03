@@ -117,6 +117,7 @@ async function up(connection) {
       address TEXT NULL,
       pin_hash VARCHAR(255) NULL,
       face_enrollment_completed BOOLEAN NOT NULL DEFAULT FALSE,
+      data_percobaan_gagal JSON NULL,
       email_verification_token VARCHAR(20) NULL,
       email_verification_expires_at DATETIME NULL,
       email_verification_sent_at DATETIME NULL,

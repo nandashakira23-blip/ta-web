@@ -321,6 +321,59 @@ async function getConnection() {
   return await mysql.createConnection(getMysqlConfig());
 }
 
+/**
+ * Catat percobaan verifikasi wajah yang GAGAL untuk data pengujian (/admin/testing).
+ * Foto probe tetap disimpan; ini TIDAK membuat presensi menjadi valid.
+ * status: 'no_match' (wajah beda/orang lain), 'no_face' (tak ada wajah), 'no_image' (tak ada gambar).
+ * Aman dipanggil walau tabel belum ada — error ditelan agar tidak mengganggu alur absen.
+ */
+async function logFaceAttempt(connection, { idKaryawan = null, jenis = 'masuk', status, similarity = null, distance = null, file = null }) {
+  try {
+    let photoPath = null;
+    if (file && file.path && fs.existsSync(file.path)) {
+      try {
+        photoPath = await persistUploadedFile(file, { folder: 'uploads/karyawan' });
+      } catch (e) {
+        console.warn('[logFaceAttempt] gagal menyimpan foto:', e.message);
+      }
+    }
+    if (!idKaryawan) return photoPath;
+    const num = (v) => (v === null || v === undefined || Number.isNaN(Number(v))) ? null : Number(v);
+    const pct = (v) => (Math.round(Number(v) * 1000) / 10).toString().replace('.', ',');
+    const simVal = num(similarity);
+    const distVal = num(distance);
+    const simThreshold = 1 - (Number(process.env.FACE_MATCH_DISTANCE) || 0.6);
+    // Keterangan: no_match dibuat DINAMIS (sertakan kemiripan aktual + ambang); lainnya teks tetap.
+    const keteranganMap = {
+      no_match: (simVal !== null)
+        ? `Wajah tidak cocok — kemiripan ${pct(simVal)}% (di bawah ambang ${pct(simThreshold)}%), kemungkinan orang lain`
+        : 'Wajah tidak cocok dengan referensi (kemungkinan orang lain)',
+      no_face: 'Tidak ada wajah terdeteksi pada foto',
+      no_image: 'Tidak ada gambar yang dikirim'
+    };
+    const entry = {
+      waktu: getCurrentDateTimeWITA(),
+      jenis,
+      status,
+      similarity: simVal,
+      distance: distVal,
+      foto: photoPath,
+      keterangan: keteranganMap[status] || null
+    };
+    // Simpan sebagai array JSON di kolom karyawan.data_percobaan_gagal (append atomik)
+    await connection.execute(
+      `UPDATE karyawan
+       SET data_percobaan_gagal = JSON_ARRAY_APPEND(COALESCE(data_percobaan_gagal, JSON_ARRAY()), '$', CAST(? AS JSON))
+       WHERE id = ?`,
+      [JSON.stringify(entry), idKaryawan]
+    );
+    return photoPath;
+  } catch (e) {
+    console.error('[logFaceAttempt] gagal mencatat percobaan:', e.message);
+    return null;
+  }
+}
+
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
@@ -4640,7 +4693,9 @@ router.post('/attendance/checkin', (req, res, next) => {
     console.log(`Detected ${detectedFaces.length} probe face(s) from ${frameFiles.length} frame(s)`);
 
     if (detectedFaces.length === 0) {
-      for (const frame of frameFiles) { if (fs.existsSync(frame.path)) { try { fs.unlinkSync(frame.path); } catch (e) {} } }
+      // Simpan 1 frame sebagai bukti percobaan GAGAL (tak ada wajah), hapus sisanya
+      await logFaceAttempt(connection, { idKaryawan: req.user.id, jenis: 'masuk', status: 'no_face', file: frameFiles[0] });
+      for (let i = 1; i < frameFiles.length; i++) { const frame = frameFiles[i]; if (frame && fs.existsSync(frame.path)) { try { fs.unlinkSync(frame.path); } catch (e) {} } }
       return res.status(400).json({
         success: false,
         message: 'No faces detected in photo',
@@ -4664,16 +4719,17 @@ router.post('/attendance/checkin', (req, res, next) => {
     req.file = chosenFrame;
 
     if (!bestMatch) {
-      if (fs.existsSync(req.file.path)) {
-        fs.unlinkSync(req.file.path);
-      }
-      
+      const bestSim = Math.max(...matchResults.map(r => r.similarity));
+      const bestDist = Math.min(...matchResults.map(r => (r.distance ?? Infinity)));
+      // Simpan foto probe + catat percobaan GAGAL (wajah beda/orang lain) — tidak membuat presensi valid
+      await logFaceAttempt(connection, { idKaryawan: req.user.id, jenis: 'masuk', status: 'no_match', similarity: bestSim, distance: Number.isFinite(bestDist) ? bestDist : null, file: req.file });
+
       return res.status(400).json({
         success: false,
         message: 'Face does not match reference',
         code: 'FACE_NO_MATCH',
         data: {
-          similarity: Math.max(...matchResults.map(r => r.similarity)),
+          similarity: bestSim,
           threshold: matchResults[0].threshold
         }
       });
@@ -5130,6 +5186,7 @@ router.post('/attendance/break/start', authenticateToken, async (req, res) => {
  */
 router.post('/attendance/break/end', authenticateToken, upload.array('photo', 5), async (req, res) => {
   const connection = await getConnection();
+  let keepFilePath = null; // frame yang disimpan sebagai bukti percobaan gagal — jangan dihapus di finally
 
   try {
     // Multi-frame: collect all uploaded frames; req.file becomes the first frame downstream.
@@ -5283,6 +5340,8 @@ router.post('/attendance/break/end', authenticateToken, upload.array('photo', 5)
     }
 
     if (detectedFaces.length === 0) {
+      keepFilePath = frameFiles[0] && frameFiles[0].path ? frameFiles[0].path : null;
+      await logFaceAttempt(connection, { idKaryawan: req.user.id, jenis: 'istirahat', status: 'no_face', file: frameFiles[0] });
       return res.status(400).json({
         success: false,
         message: 'Wajah tidak terdeteksi pada foto',
@@ -5293,6 +5352,10 @@ router.post('/attendance/break/end', authenticateToken, upload.array('photo', 5)
     const matchResults = await compareFaces(referenceFaces, detectedFaces);
     const matching = matchResults.filter(r => r.isMatch).sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
     if (!matching.length) {
+      const bestSim = Math.max(...matchResults.map(r => r.similarity));
+      const bestDist = Math.min(...matchResults.map(r => (r.distance ?? Infinity)));
+      keepFilePath = frameFiles[0] && frameFiles[0].path ? frameFiles[0].path : null;
+      await logFaceAttempt(connection, { idKaryawan: req.user.id, jenis: 'istirahat', status: 'no_match', similarity: bestSim, distance: Number.isFinite(bestDist) ? bestDist : null, file: frameFiles[0] });
       return res.status(400).json({
         success: false,
         message: 'Verifikasi wajah gagal. Pastikan wajah Anda terlihat jelas.',
@@ -5329,10 +5392,11 @@ router.post('/attendance/break/end', authenticateToken, upload.array('photo', 5)
       code: 'SERVER_ERROR'
     });
   } finally {
-    // Foto verifikasi istirahat tidak disimpan — hapus semua frame yang diupload.
+    // Foto verifikasi istirahat tidak disimpan — hapus semua frame yang diupload,
+    // KECUALI frame yang sengaja disimpan sebagai bukti percobaan gagal (keepFilePath).
     const files = Array.isArray(req.files) ? req.files : (req.file ? [req.file] : []);
     for (const f of files) {
-      if (f && f.path && fs.existsSync(f.path)) {
+      if (f && f.path && f.path !== keepFilePath && fs.existsSync(f.path)) {
         try { fs.unlinkSync(f.path); } catch (e) {}
       }
     }
@@ -5557,7 +5621,9 @@ router.post('/attendance/checkout', authenticateToken, upload.array('photo', 5),
     }
 
     if (detectedFaces.length === 0) {
-      for (const frame of frameFiles) { if (fs.existsSync(frame.path)) { try { fs.unlinkSync(frame.path); } catch (e) {} } }
+      // Simpan 1 frame sebagai bukti percobaan GAGAL (tak ada wajah), hapus sisanya
+      await logFaceAttempt(connection, { idKaryawan: req.user.id, jenis: 'keluar', status: 'no_face', file: frameFiles[0] });
+      for (let i = 1; i < frameFiles.length; i++) { const frame = frameFiles[i]; if (frame && fs.existsSync(frame.path)) { try { fs.unlinkSync(frame.path); } catch (e) {} } }
       return res.status(400).json({
         success: false,
         message: 'No faces detected in photo',
@@ -5577,9 +5643,10 @@ router.post('/attendance/checkout', authenticateToken, upload.array('photo', 5),
     req.file = chosenFrame;
 
     if (!bestMatch) {
-      if (fs.existsSync(req.file.path)) {
-        fs.unlinkSync(req.file.path);
-      }
+      const bestSim = Math.max(...matchResults.map(r => r.similarity));
+      const bestDist = Math.min(...matchResults.map(r => (r.distance ?? Infinity)));
+      // Simpan foto probe + catat percobaan GAGAL (wajah beda/orang lain) — tidak membuat presensi valid
+      await logFaceAttempt(connection, { idKaryawan: req.user.id, jenis: 'keluar', status: 'no_match', similarity: bestSim, distance: Number.isFinite(bestDist) ? bestDist : null, file: req.file });
 
       return res.status(400).json({
         success: false,
