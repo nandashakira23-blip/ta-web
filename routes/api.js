@@ -1509,9 +1509,12 @@ router.post('/auth/activate', upload.any(), async (req, res) => {
       let faces = [];
       try { faces = await detectFaces(facePhoto.path); } catch (e) { faces = []; }
 
-      // Filter (do NOT reject the whole enrollment): skip frames without exactly one clear face.
-      if (faces.length !== 1) { await discardUploadedFile(facePhoto); continue; }
-      const refFace = faces[0];
+      // Skip HANYA kalau tidak ada wajah. Kalau kedeteksi >1 (wajah di latar / pantulan / false-positive),
+      // ambil wajah TERBESAR (paling dekat = orang yang mendaftar) — jangan tolak fotonya.
+      if (faces.length === 0) { await discardUploadedFile(facePhoto); continue; }
+      const refFace = faces.reduce((a, b) =>
+        ((a.box.width * a.box.height) >= (b.box.width * b.box.height)) ? a : b
+      );
       if (refFace.confidence < MIN_ENROLL_SCORE
           || refFace.box.width < MIN_ENROLL_FACE_PX
           || refFace.box.height < MIN_ENROLL_FACE_PX) {
@@ -4683,7 +4686,7 @@ router.post('/attendance/checkin', (req, res, next) => {
     let detectedFaces = [];
     for (const frame of frameFiles) {
       try {
-        const pf = await getProbeFaces(frame.path, { tta: true });
+        const pf = await getProbeFaces(frame.path, { tta: false });
         for (const f of pf) f._frame = frame;
         detectedFaces = detectedFaces.concat(pf);
       } catch (e) {
@@ -5332,7 +5335,7 @@ router.post('/attendance/break/end', authenticateToken, upload.array('photo', 5)
     let detectedFaces = [];
     for (const frame of frameFiles) {
       try {
-        const pf = await getProbeFaces(frame.path, { tta: true });
+        const pf = await getProbeFaces(frame.path, { tta: false });
         for (const f of pf) f._frame = frame;
         detectedFaces = detectedFaces.concat(pf);
       } catch (e) {
@@ -5626,7 +5629,7 @@ router.post('/attendance/checkout', authenticateToken, upload.array('photo', 5),
     let detectedFaces = [];
     for (const frame of frameFiles) {
       try {
-        const pf = await getProbeFaces(frame.path, { tta: true });
+        const pf = await getProbeFaces(frame.path, { tta: false });
         for (const f of pf) f._frame = frame;
         detectedFaces = detectedFaces.concat(pf);
       } catch (e) {
