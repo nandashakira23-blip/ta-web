@@ -4683,9 +4683,14 @@ router.post('/attendance/checkin', (req, res, next) => {
     let detectedFaces = [];
     for (const frame of frameFiles) {
       try {
-        const pf = await getProbeFaces(frame.path, { tta: true });
+        const pf = await getProbeFaces(frame.path, { tta: false });
         for (const f of pf) f._frame = frame;
         detectedFaces = detectedFaces.concat(pf);
+        // Early-exit: berhenti begitu ada frame yang cocok -> hemat deteksi frame sisanya (absen lebih cepat)
+        if (pf.length) {
+          const _r = await compareFaces(referenceFaces, pf);
+          if (_r.some(x => x.isMatch)) break;
+        }
       } catch (e) {
         console.warn('Frame detect failed:', e.message);
       }
@@ -5332,9 +5337,14 @@ router.post('/attendance/break/end', authenticateToken, upload.array('photo', 5)
     let detectedFaces = [];
     for (const frame of frameFiles) {
       try {
-        const pf = await getProbeFaces(frame.path, { tta: true });
+        const pf = await getProbeFaces(frame.path, { tta: false });
         for (const f of pf) f._frame = frame;
         detectedFaces = detectedFaces.concat(pf);
+        // Early-exit: berhenti begitu ada frame yang cocok -> hemat deteksi frame sisanya (absen lebih cepat)
+        if (pf.length) {
+          const _r = await compareFaces(referenceFaces, pf);
+          if (_r.some(x => x.isMatch)) break;
+        }
       } catch (e) {
         console.warn('Frame detect failed:', e.message);
       }
@@ -5626,9 +5636,14 @@ router.post('/attendance/checkout', authenticateToken, upload.array('photo', 5),
     let detectedFaces = [];
     for (const frame of frameFiles) {
       try {
-        const pf = await getProbeFaces(frame.path, { tta: true });
+        const pf = await getProbeFaces(frame.path, { tta: false });
         for (const f of pf) f._frame = frame;
         detectedFaces = detectedFaces.concat(pf);
+        // Early-exit: berhenti begitu ada frame yang cocok -> hemat deteksi frame sisanya (absen lebih cepat)
+        if (pf.length) {
+          const _r = await compareFaces(referenceFaces, pf);
+          if (_r.some(x => x.isMatch)) break;
+        }
       } catch (e) {
         console.warn('Frame detect failed:', e.message);
       }
