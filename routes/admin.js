@@ -946,18 +946,27 @@ router.post('/karyawan/reset', requireAuth, async (req, res) => {
             if (row.photo_path) photoPaths.add(row.photo_path);
         }
 
-        // 3) Foto absensi (check-in / check-out) dari kolom JSON presensi
+        // 3) Foto absensi (check-in / check-out / SELESAI ISTIRAHAT) dari kolom JSON presensi
+        const parsePresensiJson = (v) => { try { return typeof v === 'string' ? JSON.parse(v || '{}') : (v || {}); } catch (e) { return {}; } };
         const presensiRows = await db.query(
-            `SELECT
-                JSON_UNQUOTE(JSON_EXTRACT(data_masuk, '$.foto'))  AS foto_masuk,
-                JSON_UNQUOTE(JSON_EXTRACT(data_keluar, '$.foto')) AS foto_keluar
-             FROM presensi
-             WHERE id_karyawan = ?`,
+            'SELECT id, data_masuk, data_keluar FROM presensi WHERE id_karyawan = ?',
             [id]
         );
+        const presensiClean = []; // record presensi setelah semua field foto dibuang
         for (const row of presensiRows) {
-            if (row.foto_masuk && row.foto_masuk !== 'null') photoPaths.add(row.foto_masuk);
-            if (row.foto_keluar && row.foto_keluar !== 'null') photoPaths.add(row.foto_keluar);
+            const dm = parsePresensiJson(row.data_masuk);
+            const dk = parsePresensiJson(row.data_keluar);
+            if (dm && dm.foto) { photoPaths.add(dm.foto); dm.foto = null; }
+            if (dk && dk.foto) { photoPaths.add(dk.foto); dk.foto = null; }
+            // foto tiap sesi istirahat (nested di data_masuk.istirahat.sesi[])
+            if (dm && dm.istirahat && Array.isArray(dm.istirahat.sesi)) {
+                dm.istirahat.sesi.forEach((s) => { if (s && s.foto) { photoPaths.add(s.foto); s.foto = null; } });
+            }
+            presensiClean.push({
+                id: row.id,
+                dataMasuk: JSON.stringify(dm),
+                dataKeluar: (row.data_keluar == null ? null : JSON.stringify(dk))
+            });
         }
 
         // 4) Foto percobaan wajah GAGAL (kolom JSON karyawan.data_percobaan_gagal)
@@ -992,14 +1001,11 @@ router.post('/karyawan/reset', requireAuth, async (req, res) => {
         // Hapus baris referensi wajah (bukan sekadar nonaktif) supaya storage & DB benar-benar bersih
         await db.query('DELETE FROM karyawan_face_reference WHERE id_karyawan = ?', [id]);
 
-        // Buang field foto dari record presensi (record absensi tetap ada, tapi tanpa foto)
-        await db.query(
-            `UPDATE presensi
-             SET data_masuk  = JSON_REMOVE(data_masuk, '$.foto'),
-                 data_keluar = JSON_REMOVE(data_keluar, '$.foto')
-             WHERE id_karyawan = ?`,
-            [id]
-        );
+        // Buang SEMUA field foto dari record presensi (check-in/out + tiap sesi istirahat).
+        // Record absensi tetap ada, cuma fotonya hilang -> tidak muncul lagi di /admin/testing.
+        for (const p of presensiClean) {
+            await db.query('UPDATE presensi SET data_masuk = ?, data_keluar = ? WHERE id = ?', [p.dataMasuk, p.dataKeluar, p.id]);
+        }
 
         // Reset data aktivasi karyawan (email, PIN, status, verifikasi email)
         await db.query(
