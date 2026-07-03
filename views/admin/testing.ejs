@@ -7,7 +7,7 @@
     <style>
         * { box-sizing: border-box; }
         body { font-family: "Times New Roman", Georgia, serif; color: #111; background: #fff; margin: 0; padding: 24px; }
-        .wrap { max-width: 1160px; margin: 0 auto; }
+        .wrap { max-width: 1180px; margin: 0 auto; }
         h1 { font-size: 22px; margin: 0 0 4px; }
         .muted { color: #666; font-size: 12px; }
         table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 14px; }
@@ -22,32 +22,44 @@
         .badge.masuk { background: #e8f0fe; color: #1a56b0; border-color: #b4ccf5; }
         .badge.keluar { background: #fff3e0; color: #a05a00; border-color: #f0cf9a; }
         .badge.istirahat { background: #f3e8fd; color: #6b21a8; border-color: #d8b4fe; }
-        .toolbar { position: sticky; top: 0; background: #fafafa; border: 1px solid #ccc; border-radius: 8px;
-                   padding: 10px 12px; margin-bottom: 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; z-index: 5; }
+        .tabs { display: flex; gap: 6px; border-bottom: 2px solid #999; margin: 14px 0 12px; }
+        .tab { font: inherit; font-size: 14px; padding: 8px 18px; border: 1px solid #ccc; border-bottom: none;
+               background: #f4f4f4; cursor: pointer; border-radius: 8px 8px 0 0; color: #555; }
+        .tab.active { background: #fff; font-weight: bold; color: #111; border-color: #999; position: relative; top: 2px; }
+        .toolbar { background: #fafafa; border: 1px solid #ccc; border-radius: 8px;
+                   padding: 10px 12px; margin-bottom: 12px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
         .toolbar label { font-size: 13px; color: #333; }
+        .fgroup { font-size: 13px; color: #333; border: 1px solid #ddd; border-radius: 6px; padding: 4px 8px; background: #fff; }
+        .fgroup label { margin-right: 8px; cursor: pointer; }
         .toolbar select, .toolbar button { font: inherit; font-size: 13px; padding: 6px 10px; border: 1px solid #999; border-radius: 6px; background: #fff; cursor: pointer; }
         .toolbar button.primary { background: #2b6cb0; color: #fff; border-color: #2b6cb0; }
         .toolbar button.danger { background: #b00020; color: #fff; border-color: #b00020; }
         .empty { padding: 40px; text-align: center; color: #666; border: 1px dashed #bbb; border-radius: 10px; }
-        @media print { .no-print { display: none !important; } body { padding: 0; } .toolbar { display: none; } }
+        @media print { .no-print { display: none !important; } body { padding: 0; } .toolbar, .tabs { display: none; } }
     </style>
 </head>
 <body>
 <%
     const persen = (s) => (s === null || s === undefined || s === '') ? '-' : (Math.round(Number(s) * 1000) / 10).toString().replace('.', ',') + '%';
     const emps = Array.from(new Map((events || []).map(e => [e.nik, e.nama])).entries());
-    const now = Date.now(); // cache-buster foto
     const totalGagal = (events || []).filter(e => e.hasil === 'gagal').length;
     const totalBerhasil = (events || []).length - totalGagal;
+    const refs = references || [];
 %>
 <div class="wrap">
     <h1>Data Pengujian Face Recognition</h1>
-    <p class="muted no-print">Absen <strong>BERHASIL</strong> (dari presensi) = potongan wajah + <strong>kotak hijau</strong>. Percobaan <strong>GAGAL</strong> juga dicatat namun <em>tidak</em> membuat presensi valid: <strong>kotak merah</strong> bila wajah orang lain, tampil <strong>apa adanya</strong> bila tak ada wajah, atau hanya alasan bila tak ada gambar. Filter/centang untuk hapus/ekspor (perubahan hanya di layar).</p>
+    <p class="muted no-print">Dua tab: <strong>Riwayat</strong> (percobaan pass/fail: check-in, check-out, selesai istirahat) &amp; <strong>Referensi</strong> (wajah pembanding). Kotak <span style="color:#0a7d2c">hijau</span> = cocok, <span style="color:#b00020">merah</span> = orang lain, apa adanya = tak ada wajah. Centang untuk pilih apa yang tampil; centang baris untuk hapus/ekspor (perubahan hanya di layar).</p>
 
+    <div class="tabs no-print">
+        <button class="tab active" id="tabbtn-riwayat" onclick="showTab('riwayat')">Riwayat (Pass/Fail)</button>
+        <button class="tab" id="tabbtn-referensi" onclick="showTab('referensi')">Referensi Wajah (<%= refs.length %>)</button>
+    </div>
+
+    <!-- ================= TAB RIWAYAT ================= -->
+    <div id="tab-riwayat">
     <% if (!events || events.length === 0) { %>
         <div class="empty">
-            Belum ada data absen / percobaan di basis data ini.<br>
-            Lakukan check-in / check-out / selesai-istirahat lewat aplikasi (berhasil maupun gagal), lalu buka halaman ini lagi.
+            Belum ada data percobaan. Lakukan check-in / check-out / selesai-istirahat lewat aplikasi (berhasil maupun gagal), lalu buka halaman ini lagi.
         </div>
     <% } else { %>
     <div class="toolbar no-print">
@@ -57,52 +69,38 @@
                 <% emps.forEach(([nik, nama]) => { %><option value="<%= nik %>"><%= nik %> - <%= nama %></option><% }) %>
             </select>
         </label>
-        <label>Jenis:
-            <select id="fType">
-                <option value="">Semua</option>
-                <option value="masuk">Check-in</option>
-                <option value="keluar">Check-out</option>
-                <option value="istirahat">Selesai istirahat</option>
-            </select>
-        </label>
-        <label>Status:
-            <select id="fHasil">
-                <option value="">Semua</option>
-                <option value="berhasil">Berhasil</option>
-                <option value="gagal">Gagal</option>
-            </select>
-        </label>
+        <span class="fgroup">Jenis:
+            <label><input type="checkbox" id="chkJenis-masuk" checked> Check-in</label>
+            <label><input type="checkbox" id="chkJenis-keluar" checked> Check-out</label>
+            <label><input type="checkbox" id="chkJenis-istirahat" checked> Istirahat</label>
+        </span>
+        <span class="fgroup">Status:
+            <label><input type="checkbox" id="chkHasil-berhasil" checked> Berhasil</label>
+            <label><input type="checkbox" id="chkHasil-gagal" checked> Gagal</label>
+        </span>
         <button type="button" class="danger" onclick="hapusTerpilih()">Hapus Terpilih</button>
         <button type="button" class="primary" onclick="exportExcel()">Export Excel</button>
         <button type="button" class="primary" id="btnWord" onclick="exportWord()">Export Word</button>
         <button type="button" onclick="window.print()">Cetak</button>
-        <button type="button" onclick="location.reload()">Reset</button>
+        <button type="button" onclick="location.reload()">Muat ulang</button>
     </div>
 
     <table id="tbl">
         <thead>
             <tr>
                 <th class="no-print"><input type="checkbox" id="chkAll" title="Pilih semua"></th>
-                <th>No</th>
-                <th>Karyawan</th>
-                <th>NIK</th>
-                <th>Tanggal</th>
-                <th>Jam</th>
-                <th>Jenis</th>
-                <th>Foto Absen</th>
-                <th>Similarity</th>
-                <th>Jarak (m)</th>
-                <th>Status</th>
-                <th>Alasan</th>
+                <th>No</th><th>Karyawan</th><th>NIK</th><th>Tanggal</th><th>Jam</th>
+                <th>Jenis</th><th>Foto Absen</th><th>Similarity</th><th>Jarak (m)</th><th>Status</th><th>Alasan</th>
             </tr>
         </thead>
         <tbody>
             <% let no = 0; (events || []).forEach(e => { no++;
                const isFail = e.hasil === 'gagal';
                const jenisKey = e.source === 'attempt' ? e.jenis : e.type;
-               const fotoUrl = e.source === 'attempt'
-                   ? (e.hasPhoto ? ('/admin/testing/attempt/' + e.kid + '/' + e.idx + '?t=' + now) : '')
-                   : ('/admin/testing/probe/' + e.pid + '/' + e.type + '?t=' + now);
+               let fotoUrl = '';
+               if (e.source === 'attempt') fotoUrl = e.hasPhoto ? ('/admin/testing/attempt/' + e.kid + '/' + e.idx) : '';
+               else if (e.source === 'break') fotoUrl = '/admin/testing/istirahat/' + e.pid + '/' + e.sidx;
+               else fotoUrl = '/admin/testing/probe/' + e.pid + '/' + e.type;
             %>
             <tr data-nik="<%= e.nik %>" data-jenis="<%= jenisKey %>" data-hasil="<%= e.hasil %>" data-nama="<%= e.nama %>">
                 <td class="c no-print"><input type="checkbox" class="rowchk"></td>
@@ -114,7 +112,7 @@
                 <td class="c"><span class="badge <%= jenisKey %>"><%= e.jenisLabel %></span></td>
                 <td class="c">
                     <% if (fotoUrl) { %>
-                        <a href="<%= fotoUrl %>" target="_blank"><img class="thumb" loading="lazy" src="<%= fotoUrl %>" alt="foto absen" onerror="this.style.opacity=.2;this.alt='(foto tidak ada)';"></a>
+                        <a href="<%= fotoUrl %>" target="_blank"><img class="thumb" loading="lazy" src="<%= fotoUrl %>" alt="foto" onerror="this.style.opacity=.2;this.alt='(foto tidak ada)';"></a>
                     <% } else { %>
                         <span class="nofoto">(tidak ada gambar)</span>
                     <% } %>
@@ -131,9 +129,42 @@
         &nbsp;|&nbsp; Berhasil: <strong><%= totalBerhasil %></strong>
         &nbsp;|&nbsp; Gagal: <strong><%= totalGagal %></strong></p>
     <% } %>
+    </div>
+
+    <!-- ================= TAB REFERENSI ================= -->
+    <div id="tab-referensi" style="display:none">
+    <% if (!refs || refs.length === 0) { %>
+        <div class="empty">Belum ada wajah referensi aktif. Daftarkan/aktivasi wajah karyawan dulu.</div>
+    <% } else { %>
+        <p class="muted">Wajah referensi = foto enrollment yang encoding-nya dipakai sebagai pembanding saat absen. Total aktif: <strong><%= refs.length %></strong>.</p>
+        <table>
+            <thead>
+                <tr><th>No</th><th>Karyawan</th><th>NIK</th><th>Metode</th><th>Dibuat</th><th>Foto Referensi</th></tr>
+            </thead>
+            <tbody>
+                <% refs.forEach((r, i) => { const url = '/admin/testing/reference/' + r.rid; %>
+                <tr>
+                    <td class="c"><%= i + 1 %></td>
+                    <td><%= r.nama %></td>
+                    <td><%= r.nik %></td>
+                    <td class="c"><%= r.method %></td>
+                    <td class="c"><%= r.dibuat %></td>
+                    <td class="c"><a href="<%= url %>" target="_blank"><img class="thumb" loading="lazy" src="<%= url %>" alt="referensi" onerror="this.style.opacity=.2;this.alt='(foto tidak ada)';"></a></td>
+                </tr>
+                <% }) %>
+            </tbody>
+        </table>
+    <% } %>
+    </div>
 </div>
 
 <script>
+    function showTab(name) {
+        document.getElementById('tab-riwayat').style.display = (name === 'riwayat') ? '' : 'none';
+        document.getElementById('tab-referensi').style.display = (name === 'referensi') ? '' : 'none';
+        document.getElementById('tabbtn-riwayat').classList.toggle('active', name === 'riwayat');
+        document.getElementById('tabbtn-referensi').classList.toggle('active', name === 'referensi');
+    }
     function rows() { return Array.prototype.slice.call(document.querySelectorAll('#tbl tbody tr')); }
     function visibleRows() { return rows().filter(function (tr) { return tr.dataset.deleted !== '1' && tr.style.display !== 'none'; }); }
     function renumber() {
@@ -141,14 +172,15 @@
         visibleRows().forEach(function (tr) { n++; tr.querySelector('.rownum').textContent = n; });
         var c = document.getElementById('count'); if (c) c.textContent = n;
     }
+    function isChecked(id) { var el = document.getElementById(id); return !el || el.checked; }
     function applyFilter() {
         var fk = document.getElementById('fKaryawan').value;
-        var ft = document.getElementById('fType').value;
-        var fh = document.getElementById('fHasil').value;
         rows().forEach(function (tr) {
             if (tr.dataset.deleted === '1') { tr.style.display = 'none'; return; }
-            var m = (!fk || fk === tr.dataset.nik) && (!ft || ft === tr.dataset.jenis) && (!fh || fh === tr.dataset.hasil);
-            tr.style.display = m ? '' : 'none';
+            var okK = !fk || fk === tr.dataset.nik;
+            var okJ = isChecked('chkJenis-' + tr.dataset.jenis);
+            var okH = isChecked('chkHasil-' + tr.dataset.hasil);
+            tr.style.display = (okK && okJ && okH) ? '' : 'none';
         });
         renumber();
     }
@@ -163,19 +195,16 @@
         var html = '<table border="1"><tr><th>No</th><th>Karyawan</th><th>NIK</th><th>Tanggal</th><th>Jam</th><th>Jenis</th><th>Similarity</th><th>Jarak (m)</th><th>Status</th><th>Alasan</th></tr>';
         var n = 0;
         visibleRows().forEach(function (tr) {
-            var td = tr.querySelectorAll('td');
-            n++;
+            var td = tr.querySelectorAll('td'); n++;
             html += '<tr><td>' + n + '</td><td>' + tr.dataset.nama + '</td><td>' + tr.dataset.nik + '</td><td>' + td[4].textContent.trim() + '</td><td>' + td[5].textContent.trim() + '</td><td>' + td[6].textContent.trim() + '</td><td>' + td[8].textContent.trim() + '</td><td>' + td[9].textContent.trim() + '</td><td>' + td[10].textContent.trim() + '</td><td>' + td[11].textContent.trim() + '</td></tr>';
         });
         html += '</table>';
         if (!n) { alert('Tidak ada data untuk diekspor.'); return; }
         var blob = new Blob(['﻿<html><head><meta charset="utf-8"></head><body>' + html + '</body></html>'], { type: 'application/vnd.ms-excel' });
         var a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = 'Data_Pengujian_Absen.xls';
+        a.href = URL.createObjectURL(blob); a.download = 'Data_Pengujian_Absen.xls';
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
     }
-    // Export ke Word (.doc) dengan tabel + FOTO ter-embed (base64) supaya ikut terbawa & rapi.
     function toDataURL(url) {
         return fetch(url).then(function (r) { return r.blob(); }).then(function (b) {
             return new Promise(function (res) { var fr = new FileReader(); fr.onloadend = function () { res(fr.result); }; fr.onerror = function () { res(''); }; fr.readAsDataURL(b); });
@@ -184,56 +213,39 @@
     async function exportWord() {
         var trs = visibleRows();
         if (!trs.length) { alert('Tidak ada data untuk diekspor.'); return; }
-        var btn = document.getElementById('btnWord');
-        var old = btn ? btn.textContent : '';
+        var btn = document.getElementById('btnWord'); var old = btn ? btn.textContent : '';
         if (btn) { btn.disabled = true; btn.textContent = 'Menyiapkan...'; }
         try {
             var head = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">' +
                 '<head><meta charset="utf-8"></head><body style="font-family:\'Times New Roman\',serif;font-size:11pt">' +
                 '<p style="font-size:14pt;font-weight:bold">Data Pengujian Face Recognition</p>' +
                 '<table border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse">' +
-                '<tr style="background:#eee;font-weight:bold">' +
-                '<td>No</td><td>Karyawan</td><td>NIK</td><td>Tanggal</td><td>Jam</td><td>Jenis</td><td>Foto Absen</td><td>Similarity</td><td>Jarak (m)</td><td>Status</td><td>Alasan</td></tr>';
-            var body = '';
-            var n = 0;
+                '<tr style="background:#eee;font-weight:bold"><td>No</td><td>Karyawan</td><td>NIK</td><td>Tanggal</td><td>Jam</td><td>Jenis</td><td>Foto Absen</td><td>Similarity</td><td>Jarak (m)</td><td>Status</td><td>Alasan</td></tr>';
+            var body = ''; var n = 0;
             for (var i = 0; i < trs.length; i++) {
-                var tr = trs[i];
-                var td = tr.querySelectorAll('td');
+                var tr = trs[i]; var td = tr.querySelectorAll('td');
                 var imgEl = tr.querySelector('img.thumb');
                 var uri = imgEl ? await toDataURL(imgEl.getAttribute('src')) : '';
                 var imgHtml = uri ? '<img src="' + uri + '" width="96" height="96"/>' : (td[7].textContent.trim() || '(foto tidak ada)');
                 n++;
-                body += '<tr>' +
-                    '<td align="center">' + n + '</td>' +
-                    '<td>' + tr.dataset.nama + '</td>' +
-                    '<td>' + tr.dataset.nik + '</td>' +
-                    '<td align="center">' + td[4].textContent.trim() + '</td>' +
-                    '<td align="center">' + td[5].textContent.trim() + '</td>' +
-                    '<td align="center">' + td[6].textContent.trim() + '</td>' +
-                    '<td align="center">' + imgHtml + '</td>' +
-                    '<td align="center">' + td[8].textContent.trim() + '</td>' +
-                    '<td align="center">' + td[9].textContent.trim() + '</td>' +
-                    '<td align="center">' + td[10].textContent.trim() + '</td>' +
-                    '<td>' + td[11].textContent.trim() + '</td>' +
-                    '</tr>';
+                body += '<tr><td align="center">' + n + '</td><td>' + tr.dataset.nama + '</td><td>' + tr.dataset.nik + '</td><td align="center">' + td[4].textContent.trim() + '</td><td align="center">' + td[5].textContent.trim() + '</td><td align="center">' + td[6].textContent.trim() + '</td><td align="center">' + imgHtml + '</td><td align="center">' + td[8].textContent.trim() + '</td><td align="center">' + td[9].textContent.trim() + '</td><td align="center">' + td[10].textContent.trim() + '</td><td>' + td[11].textContent.trim() + '</td></tr>';
             }
             var html = head + body + '</table></body></html>';
             var blob = new Blob(['﻿' + html], { type: 'application/msword' });
             var a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = 'Data_Pengujian_Face_Recognition.doc';
+            a.href = URL.createObjectURL(blob); a.download = 'Data_Pengujian_Face_Recognition.doc';
             document.body.appendChild(a); a.click(); document.body.removeChild(a);
-        } finally {
-            if (btn) { btn.disabled = false; btn.textContent = old; }
-        }
+        } finally { if (btn) { btn.disabled = false; btn.textContent = old; } }
     }
     var fk = document.getElementById('fKaryawan');
     if (fk) {
         fk.addEventListener('change', applyFilter);
-        document.getElementById('fType').addEventListener('change', applyFilter);
-        document.getElementById('fHasil').addEventListener('change', applyFilter);
-        document.getElementById('chkAll').addEventListener('change', function () {
-            visibleRows().forEach(function (tr) { tr.querySelector('.rowchk').checked = document.getElementById('chkAll').checked; });
+        ['chkJenis-masuk','chkJenis-keluar','chkJenis-istirahat','chkHasil-berhasil','chkHasil-gagal'].forEach(function (id) {
+            var el = document.getElementById(id); if (el) el.addEventListener('change', applyFilter);
+        });
+        var ca = document.getElementById('chkAll');
+        if (ca) ca.addEventListener('change', function () {
+            visibleRows().forEach(function (tr) { tr.querySelector('.rowchk').checked = ca.checked; });
         });
     }
 </script>

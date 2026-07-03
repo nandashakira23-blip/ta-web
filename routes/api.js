@@ -5333,6 +5333,7 @@ router.post('/attendance/break/end', authenticateToken, upload.array('photo', 5)
     for (const frame of frameFiles) {
       try {
         const pf = await getProbeFaces(frame.path, { tta: true });
+        for (const f of pf) f._frame = frame;
         detectedFaces = detectedFaces.concat(pf);
       } catch (e) {
         console.warn('Frame detect failed:', e.message);
@@ -5363,13 +5364,26 @@ router.post('/attendance/break/end', authenticateToken, upload.array('photo', 5)
       });
     }
 
+    // Simpan foto probe istirahat yang COCOK (bahan data pengujian /admin/testing) — istirahat ikut ter-track.
+    const bestBreak = matching[0];
+    const breakFrame = (bestBreak.face && bestBreak.face._frame) ? bestBreak.face._frame : frameFiles[0];
+    let breakFotoPath = null;
+    try {
+      breakFotoPath = await persistUploadedFile(breakFrame, { folder: 'uploads/karyawan' });
+      keepFilePath = breakFrame.path; // jangan dihapus di finally
+    } catch (e) {
+      console.warn('[break] simpan foto gagal:', e.message);
+    }
+
     const closeResult = closeActiveBreakSession(breakData, finishedAt, {
       lokasi_selesai: {
         latitude: Number(latitude),
         longitude: Number(longitude),
         jarak_meter: Number(locationValidation.distance),
         valid: true
-      }
+      },
+      foto: breakFotoPath,
+      face_similarity: bestBreak.similarity
     });
 
     await connection.execute(

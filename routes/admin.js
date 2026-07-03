@@ -3462,6 +3462,28 @@ router.get('/testing', requireAuth, requireSuperAdmin, async (req, res) => {
             });
         });
 
+        // 1b) Selesai ISTIRAHAT yang BERHASIL (dari data_masuk.istirahat.sesi[])
+        (presensiRows || []).forEach((p) => {
+            const dm = parse(p.data_masuk);
+            const sesi = (dm && dm.istirahat && Array.isArray(dm.istirahat.sesi)) ? dm.istirahat.sesi : [];
+            sesi.forEach((s, sidx) => {
+                if (!s || !s.foto || !s.selesai) return;
+                const waktu = String(s.selesai || '');       // 'YYYY-MM-DD HH:MM:SS'
+                const tglIso = waktu.slice(0, 10);
+                const jam = waktu.slice(11, 16);
+                const parts = tglIso.split('-');
+                const tgl = (parts.length === 3) ? (parts[2] + '-' + parts[1] + '-' + parts[0]) : (p.tgl || '-');
+                events.push({
+                    source: 'break', pid: p.id, sidx: sidx, type: 'istirahat', jenisLabel: 'Selesai istirahat',
+                    nik: p.nik || '-', nama: p.nama || '-', tgl: tgl || p.tgl || '-', jam: jam || '-',
+                    sortKey: (tglIso || p.tgl_iso || '') + ' ' + (jam || '00:00'),
+                    hasil: 'berhasil', similarity: s.face_similarity,
+                    jarak: (s.lokasi_selesai && s.lokasi_selesai.jarak_meter != null) ? s.lokasi_selesai.jarak_meter : null,
+                    keterangan: 'Cocok dengan referensi'
+                });
+            });
+        });
+
         // 2) Percobaan GAGAL dari kolom JSON karyawan.data_percobaan_gagal
         let karyawanGagal = [];
         try {
@@ -3497,9 +3519,29 @@ router.get('/testing', requireAuth, requireSuperAdmin, async (req, res) => {
         // Gabungkan, urutkan waktu terbaru dulu
         events.sort((x, y) => String(y.sortKey || '').localeCompare(String(x.sortKey || '')));
 
+        // 3) Wajah REFERENSI (yang dipakai pembanding) untuk tab Referensi
+        let references = [];
+        try {
+            const refRows = await db.query(`
+                SELECT fr.id AS rid, fr.enrollment_method AS method,
+                       DATE_FORMAT(fr.created_at, '%d-%m-%Y %H:%i') AS dibuat,
+                       k.nik, k.nama
+                FROM karyawan_face_reference fr
+                LEFT JOIN karyawan k ON k.id = fr.id_karyawan
+                WHERE fr.is_active = TRUE
+                ORDER BY k.nama ASC, fr.id ASC`, []);
+            references = (refRows || []).map(r => ({
+                rid: r.rid, nik: r.nik || '-', nama: r.nama || '-',
+                method: r.method || '-', dibuat: r.dibuat || '-'
+            }));
+        } catch (e) {
+            console.warn('query referensi gagal:', e.message);
+        }
+
         res.render('admin/testing', {
             title: 'Data Pengujian Face Recognition - Fleur Atelier',
-            events
+            events,
+            references
         });
     } catch (err) {
         console.error('Testing query error:', err);
@@ -3564,7 +3606,7 @@ router.get('/testing/probe/:pid/:type', requireAuth, requireSuperAdmin, (req, re
             }
             fs.writeFileSync(cacheFile, out);
             res.setHeader('Content-Type', 'image/jpeg');
-            res.setHeader('Cache-Control', 'no-store');
+            res.setHeader('Cache-Control', 'public, max-age=86400');
             return res.send(out);
         } catch (e) {
             console.error('Probe crop error:', e.message);
@@ -3642,6 +3684,87 @@ router.get('/testing/attempt/:kid/:idx', requireAuth, requireSuperAdmin, async (
         console.error('Attempt crop error:', e.message);
         return res.sendFile(src);
     }
+});
+
+// Helper crop wajah + kotak untuk halaman pengujian. boxColor null = tampil apa adanya (tanpa kotak).
+// Cache STABIL (file + header cache lama) supaya gambar tidak "hilang-hilangan".
+async function serveFaceCrop(res, photoPath, cacheKey, boxColor) {
+    const sharp = require('sharp');
+    if (!photoPath) return res.status(404).end();
+    if (/^https?:\/\//.test(photoPath)) return res.redirect(photoPath);
+    const src = [path.join(__dirname, '..', 'public', photoPath), path.join(__dirname, '..', photoPath)]
+        .find(p => fs.existsSync(p));
+    if (!src) return res.status(404).end();
+    const cacheDir = path.join(__dirname, '..', 'public', 'uploads', 'faces-crop');
+    const cacheFile = path.join(cacheDir, cacheKey + '.jpg');
+    try {
+        if (fs.existsSync(cacheFile)) { res.setHeader('Cache-Control', 'public, max-age=86400'); return res.sendFile(cacheFile); }
+        if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
+        let out = null;
+        if (boxColor) {
+            try {
+                const { detectFaces } = require('../utils/face-recognition');
+                const { createCanvas, loadImage } = require('canvas');
+                const faces = await detectFaces(src);
+                if (faces && faces.length && faces[0].box) {
+                    const box = faces[0].box;
+                    const orientedBuf = await sharp(src).rotate().toBuffer();
+                    const img = await loadImage(orientedBuf);
+                    const cx = (box.xMin + box.xMax) / 2, cy = (box.yMin + box.yMax) / 2;
+                    let side = Math.round(Math.max(box.width, box.height) * 1.35);
+                    side = Math.max(1, Math.min(side, img.width, img.height));
+                    const left = Math.max(0, Math.min(Math.round(cx - side / 2), img.width - side));
+                    const top = Math.max(0, Math.min(Math.round(cy - side / 2), img.height - side));
+                    const canvas = createCanvas(side, side);
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, left, top, side, side, 0, 0, side, side);
+                    ctx.strokeStyle = boxColor;
+                    ctx.lineWidth = Math.max(3, Math.round(side * 0.012));
+                    ctx.strokeRect(box.xMin - left, box.yMin - top, box.width, box.height);
+                    const drawn = canvas.toBuffer('image/jpeg', { quality: 0.92 });
+                    const target = Math.min(side, 512);
+                    out = await sharp(drawn).resize(target, target, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 92 }).toBuffer();
+                }
+            } catch (e) { console.warn('face crop draw gagal:', e.message); }
+        }
+        if (!out) {
+            out = await sharp(src).rotate().resize(480, 480, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 90 }).toBuffer();
+        }
+        fs.writeFileSync(cacheFile, out);
+        res.setHeader('Content-Type', 'image/jpeg');
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        return res.send(out);
+    } catch (e) {
+        console.error('serveFaceCrop error:', e.message);
+        try { return res.sendFile(src); } catch (_) { return res.status(404).end(); }
+    }
+}
+
+// Foto SELESAI ISTIRAHAT yang berhasil (kotak hijau)
+router.get('/testing/istirahat/:pid/:sidx', requireAuth, requireSuperAdmin, async (req, res) => {
+    const pid = parseInt(req.params.pid, 10);
+    const sidx = parseInt(req.params.sidx, 10);
+    if (!pid || Number.isNaN(sidx)) return res.status(400).end();
+    let rows;
+    try { rows = await db.query('SELECT data_masuk FROM presensi WHERE id = ?', [pid]); }
+    catch (e) { return res.status(404).end(); }
+    if (!rows || !rows.length) return res.status(404).end();
+    let dm = rows[0].data_masuk;
+    if (typeof dm === 'string') { try { dm = JSON.parse(dm || '{}'); } catch (e) { dm = {}; } }
+    const sesi = (dm && dm.istirahat && Array.isArray(dm.istirahat.sesi)) ? dm.istirahat.sesi : [];
+    const photoPath = sesi[sidx] && sesi[sidx].foto;
+    return serveFaceCrop(res, photoPath, 'break-' + pid + '-' + sidx, '#22c55e');
+});
+
+// Foto WAJAH REFERENSI (enrollment) — tab Referensi (kotak hijau)
+router.get('/testing/reference/:rid', requireAuth, requireSuperAdmin, async (req, res) => {
+    const rid = parseInt(req.params.rid, 10);
+    if (!rid) return res.status(400).end();
+    let rows;
+    try { rows = await db.query('SELECT photo_path FROM karyawan_face_reference WHERE id = ?', [rid]); }
+    catch (e) { return res.status(404).end(); }
+    if (!rows || !rows.length) return res.status(404).end();
+    return serveFaceCrop(res, rows[0].photo_path, 'ref-' + rid, '#22c55e');
 });
 
 module.exports = router;
