@@ -180,11 +180,6 @@
                                                             <i class="fas fa-envelope mr-1"></i><%= k.email_verified_at ? 'Email Verified' : 'Email Pending' %>
                                                         </span>
                                                     <% } %>
-                                                    <% if (k.can_approve_leave) { %>
-                                                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-purple-900/50 text-purple-300 border border-purple-600/50 ml-1">
-                                                            <i class="fas fa-user-check mr-1"></i>Approver
-                                                        </span>
-                                                    <% } %>
                                                 </div>
                                                 <div class="flex space-x-2">
                                                     <button class="edit-karyawan-btn-mobile text-blue-400 hover:text-blue-300 transition duration-200 p-2 rounded-lg hover:bg-blue-900/30"
@@ -194,8 +189,7 @@
                                                             data-email="<%= k.email || '' %>"
                                                             data-phone="<%= k.phone || '' %>"
                                                             data-jabatan="<%= k.id_jabatan || '' %>"
-                                                            data-schedule="<%= k.id_jadwal_kerja || '' %>"
-                                                            data-approver="<%= k.can_approve_leave ? '1' : '' %>">
+                                                            data-schedule="<%= k.id_jadwal_kerja || '' %>">
                                                         <i class="fas fa-edit"></i>
                                                     </button>
                                                     <button class="reset-karyawan-btn-mobile text-orange-400 hover:text-orange-300 transition duration-200 p-2 rounded-lg hover:bg-orange-900/30"
@@ -271,13 +265,6 @@
                                                     </span>
                                                 </div>
                                             <% } %>
-                                            <% if (k.can_approve_leave) { %>
-                                                <div class="mt-2">
-                                                    <span class="inline-flex px-3 py-1 text-xs font-semibold rounded-full bg-purple-900/50 text-purple-300 border border-purple-600/50">
-                                                        <i class="fas fa-user-check mr-1"></i>Approver
-                                                    </span>
-                                                </div>
-                                            <% } %>
                                         </td>
                                         <td class="px-6 py-4 whitespace-nowrap text-sm text-brown-200">
                                                 <% 
@@ -314,8 +301,7 @@
                                                             data-email="<%= k.email || '' %>"
                                                             data-phone="<%= k.phone || '' %>"
                                                             data-jabatan="<%= k.id_jabatan || '' %>"
-                                                            data-schedule="<%= k.id_jadwal_kerja || '' %>"
-                                                            data-approver="<%= k.can_approve_leave ? '1' : '' %>">
+                                                            data-schedule="<%= k.id_jadwal_kerja || '' %>">
                                                         <i class="fas fa-edit"></i>
                                                     </button>
                                                     <button class="reset-karyawan-btn text-orange-400 hover:text-orange-300 transition duration-200 p-2 rounded-lg hover:bg-orange-900/30" 
@@ -439,15 +425,6 @@
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 gap-4">
-                        <div class="flex items-end pb-2">
-                            <label class="inline-flex items-center gap-3 text-brown-200">
-                                <input type="checkbox" id="editCanApproveLeave"
-                                       class="h-5 w-5 rounded border-brown-600/50 bg-dark-700 text-brown-600 focus:ring-brown-500">
-                                <span>Dapat approve izin/sakit</span>
-                            </label>
-                        </div>
-                    </div>
 
                     <div class="flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-3 pt-4 border-t border-brown-600/30">
                         <button type="button" id="cancelEditBtn" 
@@ -710,8 +687,8 @@
         }
 
         // Edit karyawan function
-        async function editKaryawan(id, nik, nama, email, phone, idJabatan, idSchedule, canApproveLeave) {
-            console.log('editKaryawan called with:', { id, nik, nama, email, phone, idJabatan, idSchedule, canApproveLeave });
+        async function editKaryawan(id, nik, nama, email, phone, idJabatan, idSchedule) {
+            console.log('editKaryawan called with:', { id, nik, nama, email, phone, idJabatan, idSchedule });
             
             try {
                 // Ensure jabatan options are loaded
@@ -733,7 +710,6 @@
                 document.getElementById('editNama').value = nama;
                 document.getElementById('editEmail').value = email || '';
                 document.getElementById('editPhone').value = phone || '';
-                document.getElementById('editCanApproveLeave').checked = canApproveLeave === '1';
                 
                 // Set jabatan dropdown to current value
                 const jabatanSelect = document.getElementById('editJabatan');
@@ -780,10 +756,9 @@
                 const phone = btn.dataset.phone;
                 const jabatan = btn.dataset.jabatan;
                 const schedule = btn.dataset.schedule;
-                const approver = btn.dataset.approver;
 
-                console.log('Edit button clicked:', { id, nik, nama, email, phone, jabatan, schedule, approver });
-                editKaryawan(id, nik, nama, email, phone, jabatan, schedule, approver);
+                console.log('Edit button clicked:', { id, nik, nama, email, phone, jabatan, schedule });
+                editKaryawan(id, nik, nama, email, phone, jabatan, schedule);
             }
             
             // Mobile edit button
@@ -797,10 +772,9 @@
                 const phone = btn.dataset.phone;
                 const jabatan = btn.dataset.jabatan;
                 const schedule = btn.dataset.schedule;
-                const approver = btn.dataset.approver;
 
-                console.log('Mobile edit button clicked:', { id, nik, nama, email, phone, jabatan, schedule, approver });
-                editKaryawan(id, nik, nama, email, phone, jabatan, schedule, approver);
+                console.log('Mobile edit button clicked:', { id, nik, nama, email, phone, jabatan, schedule });
+                editKaryawan(id, nik, nama, email, phone, jabatan, schedule);
             }
 
             // Desktop reset button
@@ -938,8 +912,7 @@
                     email: document.getElementById('editEmail').value.trim(),
                     phone: document.getElementById('editPhone').value.trim(),
                     id_jabatan: document.getElementById('editJabatan').value,
-                    id_jadwal_kerja: document.getElementById('editSchedule').value || null,
-                    can_approve_leave: document.getElementById('editCanApproveLeave').checked
+                    id_jadwal_kerja: document.getElementById('editSchedule').value || null
                 };
 
                 console.log('Form data:', formData);

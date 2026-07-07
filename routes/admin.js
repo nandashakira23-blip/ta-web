@@ -672,7 +672,6 @@ router.get('/karyawan', requireAuth, async (req, res) => {
                e.phone,
                e.id_jabatan AS id_jabatan,
                e.id_jadwal_kerja,
-               0 AS can_approve_leave,
                e.email_verified_at,
                p.nama_jabatan AS jabatan,
                ws.nama AS jadwal_kerja,
@@ -772,92 +771,41 @@ router.get('/karyawan/add', requireAuth, async (req, res) => {
 
 // Master Karyawan - Add Process
 router.post('/karyawan/add', requireAuth, async (req, res) => {
-    upload.single('foto_referensi')(req, res, async function(err) {
-        if (err instanceof multer.MulterError) {
-            // Multer error (file size, etc)
-            req.flash('error', 'Error upload file: ' + err.message);
-            return res.redirect('/admin/karyawan/add');
-        } else if (err) {
-            // Other errors
-            req.flash('error', 'Error: ' + err.message);
+    // Foto referensi dihapus dari form — enrollment wajah dilakukan karyawan
+    // sendiri lewat app (5 pose). Form ini tidak lagi multipart, cukup req.body.
+    const { nik, nama, email, phone, id_jabatan, id_jadwal_kerja } = req.body;
+
+    if (!nik || !nama || !id_jabatan || !id_jadwal_kerja) {
+        req.flash('error', 'Semua field harus diisi');
+        return res.redirect('/admin/karyawan/add');
+    }
+
+    const query = `
+        INSERT INTO karyawan (
+            nik, nama, email, phone, id_jabatan, id_jadwal_kerja, status, face_enrollment_completed
+        ) VALUES (?, ?, ?, ?, ?, ?, 'draft', FALSE)
+    `;
+
+    db.query(query, [
+        nik,
+        nama,
+        email || null,
+        phone || null,
+        id_jabatan,
+        id_jadwal_kerja
+    ], (err) => {
+        if (err) {
+            console.error('Database error:', err);
+            if (err.code === 'ER_DUP_ENTRY') {
+                req.flash('error', 'NIK sudah terdaftar');
+            } else {
+                req.flash('error', 'Gagal menambah karyawan: ' + err.message);
+            }
             return res.redirect('/admin/karyawan/add');
         }
-        
-        // No error, proceed with saving
-        const { nik, nama, email, phone, id_jabatan, id_jadwal_kerja, can_approve_leave } = req.body;
-        
-        if (!nik || !nama || !id_jabatan || !id_jadwal_kerja) {
-            await discardUploadedFile(req.file);
-            req.flash('error', 'Semua field harus diisi');
-            return res.redirect('/admin/karyawan/add');
-        }
 
-        let fotoPath = null;
-        let detectedFace = null;
-        if (req.file) {
-            try {
-                const { detectFaces } = require('../utils/face-recognition');
-                const faces = await detectFaces(req.file.path);
-                detectedFace = faces[0] || null;
-                fotoPath = await persistUploadedFile(req.file, { folder: 'uploads/karyawan' });
-            } catch (faceError) {
-                console.error('Face detection/upload error:', faceError);
-                await discardUploadedFile(req.file);
-                req.flash('error', 'Gagal memproses foto referensi');
-                return res.redirect('/admin/karyawan/add');
-            }
-        }
-
-        const query = `
-            INSERT INTO karyawan (
-                nik, nama, email, phone, id_jabatan, id_jadwal_kerja, status, profile_picture, face_enrollment_completed
-            ) VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, FALSE)
-        `;
-
-        db.query(query, [
-            nik,
-            nama,
-            email || null,
-            phone || null,
-            id_jabatan,
-            id_jadwal_kerja,
-            fotoPath
-        ], async (err, results) => {
-            if (err) {
-                console.error('Database error:', err);
-                if (err.code === 'ER_DUP_ENTRY') {
-                    req.flash('error', 'NIK sudah terdaftar');
-                } else {
-                    req.flash('error', 'Gagal menambah karyawan: ' + err.message);
-                }
-                return res.redirect('/admin/karyawan/add');
-            }
-            const karyawanId = results.insertId;
-
-            // If photo uploaded, process for face recognition
-            if (fotoPath && detectedFace) {
-                const faceQuery = `
-                    INSERT INTO karyawan_face_reference
-                    (id_karyawan, face_encoding, photo_path, enrollment_method, is_active)
-                    VALUES (?, ?, ?, 'manual', TRUE)
-                `;
-
-                db.query(faceQuery, [
-                    karyawanId,
-                    JSON.stringify(detectedFace),
-                    fotoPath
-                ], (faceErr) => {
-                    if (faceErr) {
-                        console.error('Face reference save error:', faceErr);
-                    } else {
-                        console.log(`Face reference saved for karyawan ${karyawanId}`);
-                    }
-                });
-            }
-
-            req.flash('success', 'Karyawan berhasil ditambahkan');
-            res.redirect('/admin/karyawan');
-        });
+        req.flash('success', 'Karyawan berhasil ditambahkan');
+        res.redirect('/admin/karyawan');
     });
 });
 
@@ -879,7 +827,7 @@ router.post('/karyawan/delete/:id', requireAuth, async (req, res) => {
 
 // Master Karyawan - Update (API)
 router.post('/karyawan/update', requireAuth, async (req, res) => {
-    const { id, nik, nama, email, phone, id_jabatan, id_jadwal_kerja, can_approve_leave } = req.body;
+    const { id, nik, nama, email, phone, id_jabatan, id_jadwal_kerja } = req.body;
     
     if (!id || !nik || !nama || !id_jabatan) {
         return res.json({ success: false, message: 'Semua field harus diisi' });
