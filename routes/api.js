@@ -870,6 +870,9 @@ function toLegacyEmployeePayloadV2(row) {
     email: row.email,
     no_hp: row.phone,
     phone: row.phone,
+    jenis_kelamin: row.jenis_kelamin || null,
+    tanggal_lahir: row.tanggal_lahir || null,
+    address: row.address || null,
     profile_picture: row.profile_picture || null,
     jabatan: row.jabatan_id ? {
       id: row.jabatan_id,
@@ -2261,6 +2264,9 @@ router.get('/auth/profile/:id', authenticateToken, async (req, res) => {
         e.nama AS nama,
         e.email,
         e.phone,
+        e.jenis_kelamin,
+        DATE_FORMAT(e.tanggal_lahir, '%Y-%m-%d') AS tanggal_lahir,
+        e.address,
         e.profile_picture AS profile_picture,
         e.id_jadwal_kerja,
         e.shift_id,
@@ -2353,7 +2359,7 @@ router.put('/auth/profile/:id', authenticateToken, uploadProfile.single('profile
   
   try {
     const { id } = req.params;
-    const { email, phone } = req.body;
+    const { email, phone, jenis_kelamin, tanggal_lahir, address } = req.body;
 
     // Verify user can only update their own profile
     if (parseInt(id) !== req.user.id) {
@@ -2381,6 +2387,21 @@ router.put('/auth/profile/:id', authenticateToken, uploadProfile.single('profile
     if (phone !== undefined) {
       updates.push('phone = ?');
       params.push(phone);
+    }
+
+    if (jenis_kelamin !== undefined) {
+      updates.push('jenis_kelamin = ?');
+      params.push(jenis_kelamin || null);
+    }
+
+    if (tanggal_lahir !== undefined) {
+      updates.push('tanggal_lahir = ?');
+      params.push(tanggal_lahir || null);
+    }
+
+    if (address !== undefined) {
+      updates.push('address = ?');
+      params.push(address || null);
     }
 
     if (req.file) {
@@ -2419,6 +2440,9 @@ router.put('/auth/profile/:id', authenticateToken, uploadProfile.single('profile
         e.nama AS nama,
         e.email,
         e.phone,
+        e.jenis_kelamin,
+        DATE_FORMAT(e.tanggal_lahir, '%Y-%m-%d') AS tanggal_lahir,
+        e.address,
         e.profile_picture AS profile_picture,
         e.id_jadwal_kerja,
         e.shift_id,

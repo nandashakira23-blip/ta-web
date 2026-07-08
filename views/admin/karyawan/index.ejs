@@ -189,7 +189,10 @@
                                                             data-email="<%= k.email || '' %>"
                                                             data-phone="<%= k.phone || '' %>"
                                                             data-jabatan="<%= k.id_jabatan || '' %>"
-                                                            data-schedule="<%= k.id_jadwal_kerja || '' %>">
+                                                            data-schedule="<%= k.id_jadwal_kerja || '' %>"
+                                                            data-jenis-kelamin="<%= k.jenis_kelamin || '' %>"
+                                                            data-tanggal-lahir="<%= k.tanggal_lahir ? new Date(k.tanggal_lahir).toISOString().split('T')[0] : '' %>"
+                                                            data-address="<%= k.address || '' %>">
                                                         <i class="fas fa-edit"></i>
                                                     </button>
                                                     <button class="reset-karyawan-btn-mobile text-orange-400 hover:text-orange-300 transition duration-200 p-2 rounded-lg hover:bg-orange-900/30"
@@ -301,7 +304,10 @@
                                                             data-email="<%= k.email || '' %>"
                                                             data-phone="<%= k.phone || '' %>"
                                                             data-jabatan="<%= k.id_jabatan || '' %>"
-                                                            data-schedule="<%= k.id_jadwal_kerja || '' %>">
+                                                            data-schedule="<%= k.id_jadwal_kerja || '' %>"
+                                                            data-jenis-kelamin="<%= k.jenis_kelamin || '' %>"
+                                                            data-tanggal-lahir="<%= k.tanggal_lahir ? new Date(k.tanggal_lahir).toISOString().split('T')[0] : '' %>"
+                                                            data-address="<%= k.address || '' %>">
                                                         <i class="fas fa-edit"></i>
                                                     </button>
                                                     <button class="reset-karyawan-btn text-orange-400 hover:text-orange-300 transition duration-200 p-2 rounded-lg hover:bg-orange-900/30" 
@@ -351,7 +357,7 @@
 
     <!-- Edit Karyawan Modal -->
     <div id="editKaryawanModal" class="fixed inset-0 bg-black bg-opacity-70 hidden items-center justify-center z-50 p-4 backdrop-blur-sm">
-        <div class="bg-dark-800 rounded-xl max-w-2xl w-full max-h-96 overflow-hidden shadow-2xl border border-brown-600/30">
+        <div class="bg-dark-800 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl border border-brown-600/30">
             <div class="p-4 sm:p-6 border-b border-brown-600/30 bg-brown-800/50">
                 <div class="flex justify-between items-center">
                     <h3 class="text-lg sm:text-xl font-bold text-white text-glow flex items-center">
@@ -363,7 +369,7 @@
                     </button>
                 </div>
             </div>
-            <div class="p-4 sm:p-6 overflow-y-auto max-h-80">
+            <div class="p-4 sm:p-6 overflow-y-auto max-h-[80vh]">
                 <form id="editKaryawanForm" class="space-y-4">
                     <input type="hidden" id="editKaryawanId">
                     
@@ -399,6 +405,36 @@
                             <input type="text" id="editPhone"
                                    class="w-full px-3 py-2 bg-dark-700 border border-brown-600/50 rounded-lg focus:ring-2 focus:ring-brown-500 focus:border-brown-400 text-white placeholder-brown-400">
                         </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label for="editJenisKelamin" class="block text-sm font-semibold text-brown-300 mb-2">
+                                <i class="fas fa-venus-mars mr-2"></i>Jenis Kelamin
+                            </label>
+                            <select id="editJenisKelamin"
+                                    class="w-full px-3 py-2 bg-dark-700 border border-brown-600/50 rounded-lg focus:ring-2 focus:ring-brown-500 focus:border-brown-400 text-white">
+                                <option value="">Pilih Jenis Kelamin</option>
+                                <option value="L">Laki-laki</option>
+                                <option value="P">Perempuan</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="editTanggalLahir" class="block text-sm font-semibold text-brown-300 mb-2">
+                                <i class="fas fa-calendar mr-2"></i>Tanggal Lahir
+                            </label>
+                            <input type="date" id="editTanggalLahir"
+                                   class="w-full px-3 py-2 bg-dark-700 border border-brown-600/50 rounded-lg focus:ring-2 focus:ring-brown-500 focus:border-brown-400 text-white">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="editAddress" class="block text-sm font-semibold text-brown-300 mb-2">
+                            <i class="fas fa-map-marker-alt mr-2"></i>Alamat
+                        </label>
+                        <textarea id="editAddress" rows="2"
+                                  class="w-full px-3 py-2 bg-dark-700 border border-brown-600/50 rounded-lg focus:ring-2 focus:ring-brown-500 focus:border-brown-400 text-white placeholder-brown-400"
+                                  placeholder="Alamat lengkap karyawan"></textarea>
                     </div>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -687,8 +723,8 @@
         }
 
         // Edit karyawan function
-        async function editKaryawan(id, nik, nama, email, phone, idJabatan, idSchedule) {
-            console.log('editKaryawan called with:', { id, nik, nama, email, phone, idJabatan, idSchedule });
+        async function editKaryawan(id, nik, nama, email, phone, idJabatan, idSchedule, jenisKelamin, tanggalLahir, address) {
+            console.log('editKaryawan called with:', { id, nik, nama, email, phone, idJabatan, idSchedule, jenisKelamin, tanggalLahir, address });
             
             try {
                 // Ensure jabatan options are loaded
@@ -722,6 +758,11 @@
                 // Set values directly — options already populated by await above
                 jabatanSelect.value = jabatanId;
                 scheduleSelect.value = scheduleId;
+
+                // Set new fields
+                document.getElementById('editJenisKelamin').value = jenisKelamin || '';
+                document.getElementById('editTanggalLahir').value = tanggalLahir || '';
+                document.getElementById('editAddress').value = address || '';
                 
                 console.log('Jabatan set to:', jabatanSelect.value, '(target:', jabatanId, ')');
                 console.log('Schedule set to:', scheduleSelect.value, '(target:', scheduleId, ')');
@@ -756,9 +797,12 @@
                 const phone = btn.dataset.phone;
                 const jabatan = btn.dataset.jabatan;
                 const schedule = btn.dataset.schedule;
+                const jenisKelamin = btn.dataset.jenisKelamin;
+                const tanggalLahir = btn.dataset.tanggalLahir;
+                const address = btn.dataset.address;
 
-                console.log('Edit button clicked:', { id, nik, nama, email, phone, jabatan, schedule });
-                editKaryawan(id, nik, nama, email, phone, jabatan, schedule);
+                console.log('Edit button clicked:', { id, nik, nama, email, phone, jabatan, schedule, jenisKelamin, tanggalLahir, address });
+                editKaryawan(id, nik, nama, email, phone, jabatan, schedule, jenisKelamin, tanggalLahir, address);
             }
             
             // Mobile edit button
@@ -772,9 +816,12 @@
                 const phone = btn.dataset.phone;
                 const jabatan = btn.dataset.jabatan;
                 const schedule = btn.dataset.schedule;
+                const jenisKelamin = btn.dataset.jenisKelamin;
+                const tanggalLahir = btn.dataset.tanggalLahir;
+                const address = btn.dataset.address;
 
-                console.log('Mobile edit button clicked:', { id, nik, nama, email, phone, jabatan, schedule });
-                editKaryawan(id, nik, nama, email, phone, jabatan, schedule);
+                console.log('Mobile edit button clicked:', { id, nik, nama, email, phone, jabatan, schedule, jenisKelamin, tanggalLahir, address });
+                editKaryawan(id, nik, nama, email, phone, jabatan, schedule, jenisKelamin, tanggalLahir, address);
             }
 
             // Desktop reset button
@@ -912,7 +959,10 @@
                     email: document.getElementById('editEmail').value.trim(),
                     phone: document.getElementById('editPhone').value.trim(),
                     id_jabatan: document.getElementById('editJabatan').value,
-                    id_jadwal_kerja: document.getElementById('editSchedule').value || null
+                    id_jadwal_kerja: document.getElementById('editSchedule').value || null,
+                    jenis_kelamin: document.getElementById('editJenisKelamin').value || null,
+                    tanggal_lahir: document.getElementById('editTanggalLahir').value || null,
+                    address: document.getElementById('editAddress').value.trim() || null
                 };
 
                 console.log('Form data:', formData);

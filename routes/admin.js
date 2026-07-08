@@ -672,6 +672,9 @@ router.get('/karyawan', requireAuth, async (req, res) => {
                e.phone,
                e.id_jabatan AS id_jabatan,
                e.id_jadwal_kerja,
+               e.jenis_kelamin,
+               DATE_FORMAT(e.tanggal_lahir, '%Y-%m-%d') AS tanggal_lahir,
+               e.address,
                e.email_verified_at,
                p.nama_jabatan AS jabatan,
                ws.nama AS jadwal_kerja,
@@ -773,7 +776,7 @@ router.get('/karyawan/add', requireAuth, async (req, res) => {
 router.post('/karyawan/add', requireAuth, async (req, res) => {
     // Foto referensi dihapus dari form — enrollment wajah dilakukan karyawan
     // sendiri lewat app (5 pose). Form ini tidak lagi multipart, cukup req.body.
-    const { nik, nama, email, phone, id_jabatan, id_jadwal_kerja } = req.body;
+    const { nik, nama, email, phone, id_jabatan, id_jadwal_kerja, jenis_kelamin, tanggal_lahir, address } = req.body;
 
     if (!nik || !nama || !id_jabatan || !id_jadwal_kerja) {
         req.flash('error', 'Semua field harus diisi');
@@ -782,8 +785,8 @@ router.post('/karyawan/add', requireAuth, async (req, res) => {
 
     const query = `
         INSERT INTO karyawan (
-            nik, nama, email, phone, id_jabatan, id_jadwal_kerja, status, face_enrollment_completed
-        ) VALUES (?, ?, ?, ?, ?, ?, 'draft', FALSE)
+            nik, nama, email, phone, id_jabatan, id_jadwal_kerja, jenis_kelamin, tanggal_lahir, address, status, face_enrollment_completed
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', FALSE)
     `;
 
     db.query(query, [
@@ -792,7 +795,10 @@ router.post('/karyawan/add', requireAuth, async (req, res) => {
         email || null,
         phone || null,
         id_jabatan,
-        id_jadwal_kerja
+        id_jadwal_kerja,
+        jenis_kelamin || null,
+        tanggal_lahir || null,
+        address || null
     ], (err) => {
         if (err) {
             console.error('Database error:', err);
@@ -827,20 +833,17 @@ router.post('/karyawan/delete/:id', requireAuth, async (req, res) => {
 
 // Master Karyawan - Update (API)
 router.post('/karyawan/update', requireAuth, async (req, res) => {
-    const { id, nik, nama, email, phone, id_jabatan, id_jadwal_kerja } = req.body;
+    const { id, nik, nama, email, phone, id_jabatan, id_jadwal_kerja, jenis_kelamin, tanggal_lahir, address } = req.body;
     
     if (!id || !nik || !nama || !id_jabatan) {
         return res.json({ success: false, message: 'Semua field harus diisi' });
     }
 
     let query, params;
-    if (id_jadwal_kerja) {
-        query = 'UPDATE karyawan SET nik = ?, nama = ?, email = ?, phone = ?, id_jabatan = ?, id_jadwal_kerja = ? WHERE id = ? AND deleted_at IS NULL';
-        params = [nik.trim(), nama.trim(), email || null, phone || null, id_jabatan, id_jadwal_kerja, id];
-    } else {
-        query = 'UPDATE karyawan SET nik = ?, nama = ?, email = ?, phone = ?, id_jabatan = ?, id_jadwal_kerja = NULL WHERE id = ? AND deleted_at IS NULL';
-        params = [nik.trim(), nama.trim(), email || null, phone || null, id_jabatan, id];
-    }
+    query = `UPDATE karyawan SET nik = ?, nama = ?, email = ?, phone = ?, id_jabatan = ?, id_jadwal_kerja = ?,
+             jenis_kelamin = ?, tanggal_lahir = ?, address = ? WHERE id = ? AND deleted_at IS NULL`;
+    params = [nik.trim(), nama.trim(), email || null, phone || null, id_jabatan, id_jadwal_kerja || null,
+              jenis_kelamin || null, tanggal_lahir || null, address || null, id];
     
     db.query(query, params, (err, results) => {
         if (err) {

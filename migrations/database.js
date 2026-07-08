@@ -108,6 +108,7 @@ async function up(connection) {
       nama VARCHAR(100) NOT NULL,
       email VARCHAR(100) NULL UNIQUE,
       tanggal_lahir DATE NULL,
+      jenis_kelamin ENUM('L','P') NULL,
       phone VARCHAR(20) NULL,
       id_jabatan BIGINT NULL,
       shift_id BIGINT NULL,
