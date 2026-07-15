@@ -1655,7 +1655,8 @@ router.get('/setting', requireAuth, async (req, res) => {
         SELECT
             lat_kantor AS lat_kantor,
             long_kantor AS long_kantor,
-            radius_meter
+            radius_meter,
+            durasi_istirahat_menit
         FROM pengaturan
         LIMIT 1
     `;
@@ -1666,13 +1667,13 @@ router.get('/setting', requireAuth, async (req, res) => {
             return res.render('admin/setting', {
                 title: 'Setting Lokasi - Fleur Atelier',
                 admin: req.session.admin,
-                setting: { lat_kantor: -8.8155675, long_kantor: 115.1253343, radius_meter: 100 },
+                setting: { lat_kantor: -8.8155675, long_kantor: 115.1253343, radius_meter: 100, durasi_istirahat_menit: 60 },
                 success: req.flash('success'),
                 error: req.flash('error')
             });
         }
 
-        const setting = results.length > 0 ? results[0] : { lat_kantor: -8.8155675, long_kantor: 115.1253343, radius_meter: 100 };
+        const setting = results.length > 0 ? results[0] : { lat_kantor: -8.8155675, long_kantor: 115.1253343, radius_meter: 100, durasi_istirahat_menit: 60 };
 
         res.render('admin/setting', {
             title: 'Setting Lokasi - Fleur Atelier',
@@ -1686,15 +1687,17 @@ router.get('/setting', requireAuth, async (req, res) => {
 
 // Setting Lokasi - Update
 router.post('/setting', requireAuth, async (req, res) => {
-    const { lat_kantor, long_kantor, radius_meter } = req.body;
+    const { lat_kantor, long_kantor, radius_meter, durasi_istirahat_menit } = req.body;
 
     if (!lat_kantor || !long_kantor || !radius_meter) {
         req.flash('error', 'Semua field harus diisi');
         return res.redirect('/admin/setting');
     }
 
-    const query = 'UPDATE pengaturan SET lat_kantor = ?, long_kantor = ?, radius_meter = ? WHERE id = 1';
-    const queryParams = [lat_kantor, long_kantor, radius_meter];
+    const durasi = parseInt(durasi_istirahat_menit) || 60;
+
+    const query = 'UPDATE pengaturan SET lat_kantor = ?, long_kantor = ?, radius_meter = ?, durasi_istirahat_menit = ? WHERE id = 1';
+    const queryParams = [lat_kantor, long_kantor, radius_meter, durasi];
 
     db.query(query, queryParams, (err, results) => {
         if (err) {

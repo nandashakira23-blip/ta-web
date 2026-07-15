@@ -4,15 +4,15 @@ const isAbsensiPage = currentPage === 'absensi' || currentPage === 'ketidakhadir
 
 const adminMenus = [
     { href: '/admin/dashboard',        label: 'Dashboard',        icon: 'fa-tachometer-alt', match: 'dashboard' },
-    { href: '/admin/karyawan',         label: 'Karyawan',         icon: 'fa-users',          match: 'karyawan' },
-    { href: '/admin/jabatan',          label: 'Jabatan',          icon: 'fa-briefcase',      match: 'jabatan' },
-    { href: '/admin/shift',            label: 'Shift',            icon: 'fa-business-time',  match: 'shift' },
-    { href: '/admin/work-schedule',    label: 'Jadwal',           icon: 'fa-clock',          match: 'work-schedule' },
     { href: '/admin/manager-accounts', label: 'Akun',             icon: 'fa-user-shield',    match: 'manager-accounts' },
     { href: '/admin/presensi',         label: 'Presensi',         icon: 'fa-calendar-check', match: 'presensi' },
+    { href: '/admin/jabatan',          label: 'Jabatan',          icon: 'fa-briefcase',      match: 'jabatan' },
+    { href: '/admin/karyawan',         label: 'Karyawan',         icon: 'fa-users',          match: 'karyawan' },
+    { href: '/admin/shift',            label: 'Shift',            icon: 'fa-business-time',  match: 'shift' },
+    { href: '/admin/work-schedule',    label: 'Jadwal',           icon: 'fa-clock',          match: 'work-schedule' },
+    { href: '/admin/setting',          label: 'Pengaturan',        icon: 'fa-cog',            match: 'setting' },
     { href: '/admin/absensi',          label: 'Absensi',          icon: 'fa-file-medical',   match: ['absensi', 'ketidakhadiran'] },
     { href: '/admin/laporan',          label: 'Laporan',          icon: 'fa-chart-line',     match: 'laporan' },
-    { href: '/admin/setting',          label: 'Pengaturan Lokasi', icon: 'fa-map-marker-alt', match: 'setting' },
 ];
 
 const managerMenus = [

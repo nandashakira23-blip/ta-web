@@ -728,9 +728,17 @@ function normalizeBreakAllowanceMinutes(value) {
   return Number.isFinite(minutes) && minutes > 0 ? Math.floor(minutes) : DEFAULT_BREAK_ALLOWANCE_MINUTES;
 }
 
-async function getBreakAllowanceMinutes(_connection) {
-  // Hardcoded: jatah istirahat default 60 menit per hari
-  return DEFAULT_BREAK_ALLOWANCE_MINUTES;
+async function getBreakAllowanceMinutes(connection) {
+  try {
+    const [rows] = await connection.execute(
+      `SELECT durasi_istirahat_menit FROM pengaturan LIMIT 1`
+    );
+    const minutes = rows.length > 0 ? Number(rows[0].durasi_istirahat_menit) : null;
+    return Number.isFinite(minutes) && minutes > 0 ? Math.floor(minutes) : DEFAULT_BREAK_ALLOWANCE_MINUTES;
+  } catch (err) {
+    console.error('Gagal membaca durasi istirahat dari pengaturan:', err.message);
+    return DEFAULT_BREAK_ALLOWANCE_MINUTES;
+  }
 }
 
 // Istirahat disimpan di dalam kolom JSON data_masuk (tabel presensi tidak punya kolom data_istirahat)
@@ -5574,13 +5582,14 @@ router.post('/attendance/checkout', authenticateToken, upload.array('photo', 5),
       `SELECT
         lat_kantor AS lat_kantor,
         long_kantor AS long_kantor,
-        radius_meter
+        radius_meter,
+        durasi_istirahat_menit
       FROM pengaturan
       LIMIT 1`
     );
 
     const settings = settingsRows[0];
-    const breakAllowanceMinutes = DEFAULT_BREAK_ALLOWANCE_MINUTES;
+    const breakAllowanceMinutes = settings.durasi_istirahat_menit || DEFAULT_BREAK_ALLOWANCE_MINUTES;
     const locationValidation = isLocationValid(
       parseFloat(latitude),
       parseFloat(longitude),
@@ -7122,7 +7131,8 @@ router.get('/settings/office-location', authenticateToken, async (req, res) => {
       SELECT
         lat_kantor AS lat_kantor,
         long_kantor AS long_kantor,
-        radius_meter
+        radius_meter,
+        durasi_istirahat_menit
       FROM pengaturan
       LIMIT 1
     `);
@@ -7144,8 +7154,8 @@ router.get('/settings/office-location', authenticateToken, async (req, res) => {
         latitude: parseFloat(settings.lat_kantor),
         longitude: parseFloat(settings.long_kantor),
         radiusMeters: parseFloat(settings.radius_meter), // Changed from radius to radiusMeters
-        breakDurationMinutes: DEFAULT_BREAK_ALLOWANCE_MINUTES,
-        durasi_istirahat_menit: DEFAULT_BREAK_ALLOWANCE_MINUTES,
+        breakDurationMinutes: Number(settings.durasi_istirahat_menit) || DEFAULT_BREAK_ALLOWANCE_MINUTES,
+        durasi_istirahat_menit: Number(settings.durasi_istirahat_menit) || DEFAULT_BREAK_ALLOWANCE_MINUTES,
         address: null // Optional field for future use
       }
     });

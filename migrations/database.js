@@ -235,6 +235,7 @@ async function up(connection) {
       lat_kantor DECIMAL(10,8) NOT NULL DEFAULT -6.20000000,
       long_kantor DECIMAL(11,8) NOT NULL DEFAULT 106.81666600,
       radius_meter INT NOT NULL DEFAULT 100,
+      durasi_istirahat_menit INT NOT NULL DEFAULT 60,
       pin_required BOOLEAN NOT NULL DEFAULT TRUE,
       pin_max_attempts INT NOT NULL DEFAULT 3,
       pin_lockout_minutes INT NOT NULL DEFAULT 30,
@@ -282,10 +283,10 @@ async function up(connection) {
 
   await connection.execute(`
     INSERT INTO pengaturan (
-      lat_kantor, long_kantor, radius_meter,
+      lat_kantor, long_kantor, radius_meter, durasi_istirahat_menit,
       pin_required, pin_max_attempts, pin_lockout_minutes,
       face_and_pin_required
-    ) VALUES (-6.20000000, 106.81666600, 100, TRUE, 3, 30, TRUE)
+    ) VALUES (-6.20000000, 106.81666600, 100, 60, TRUE, 3, 30, TRUE)
   `);
 
   await connection.execute(`
