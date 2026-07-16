@@ -173,13 +173,16 @@
                                     <th class="px-4 py-3 text-left">Jam Masuk</th>
                                     <th class="px-4 py-3 text-left">Jam Keluar</th>
                                     <th class="px-4 py-3 text-left">Status</th>
+                                    <th class="px-4 py-3 text-left">Jam Kerja
+                                        <i class="fas fa-info-circle ml-1 cursor-help text-brown-400" title="Efektif = jam kerja bersih = Total + Izin - Telat - Pulang awal - Istirahat (baru terisi setelah clock-out).&#10;Total = jam masuk sampai jam keluar.&#10;Telat = masuk melebihi jam mulai shift.&#10;Plg awal = keluar sebelum jam selesai shift.&#10;Lembur = keluar melebihi jam selesai shift.&#10;Izin = menit cuti/izin disetujui pada hari itu."></i>
+                                    </th>
                                     <th class="px-4 py-3 text-center">Jarak</th>
                                     <th class="px-4 py-3 text-center">Lokasi</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-brown-700/30 text-brown-100">
                                 <% if (records.length === 0) { %>
-                                    <tr><td colspan="6" class="px-4 py-10 text-center text-brown-300">
+                                    <tr><td colspan="7" class="px-4 py-10 text-center text-brown-300">
                                         <i class="fas fa-inbox text-3xl block mb-3 text-brown-400"></i>
                                         Tidak ada riwayat presensi untuk periode ini.
                                     </td></tr>
@@ -203,6 +206,17 @@
                                             <% } else { %>
                                                 <span class="rounded-full px-3 py-1 text-xs bg-red-900/60 text-red-200"><i class="fas fa-times-circle mr-1"></i><%= r.status %></span>
                                             <% } %>
+                                        </td>
+                                        <td class="px-4 py-3 text-sm">
+                                            <% const fmtMin = (m) => { m = Number(m||0); const h = Math.floor(m/60), mm = m%60; return (h ? h+'j ' : '') + mm + 'm'; }; %>
+                                            <div class="font-medium text-white">Efektif: <%= r.jam_keluar ? fmtMin(r.effective_work_minutes) : '-' %></div>
+                                            <div class="text-xs text-brown-300">Total: <%= fmtMin(r.total_work_minutes) %></div>
+                                            <div class="mt-1 flex flex-wrap gap-1">
+                                                <% if (Number(r.late_minutes)>0){ %><span class="rounded bg-yellow-900/50 px-1.5 py-0.5 text-[10px] text-yellow-200">Telat <%= r.late_minutes %>m</span><% } %>
+                                                <% if (Number(r.early_leave_minutes)>0){ %><span class="rounded bg-orange-900/50 px-1.5 py-0.5 text-[10px] text-orange-200">Plg awal <%= r.early_leave_minutes %>m</span><% } %>
+                                                <% if (Number(r.overtime_minutes)>0){ %><span class="rounded bg-blue-900/50 px-1.5 py-0.5 text-[10px] text-blue-200">Lembur <%= r.overtime_minutes %>m</span><% } %>
+                                                <% if (Number(r.approved_leave_minutes)>0){ %><span class="rounded bg-green-900/50 px-1.5 py-0.5 text-[10px] text-green-200">Izin <%= r.approved_leave_minutes %>m</span><% } %>
+                                            </div>
                                         </td>
                                         <td class="px-4 py-3 text-center text-sm text-brown-200">
                                             <%= r.distance_in || 0 %> m
