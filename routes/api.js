@@ -6426,7 +6426,17 @@ router.get('/attendance/history', authenticateToken, async (req, res) => {
             AND a.status IN ('approved', 'disetujui')
             AND ad.tanggal BETWEEN a.tanggal_mulai AND a.tanggal_selesai
           ORDER BY a.id DESC LIMIT 1
-        ) AS leave_request_id
+        ) AS leave_request_id,
+        (
+          SELECT ka.nama FROM permintaan_absensi pa
+          JOIN absensi a2 ON a2.id = pa.id_absensi
+          JOIN karyawan ka ON ka.id = a2.id_karyawan
+          WHERE pa.id_pengganti = ad.id_karyawan
+            AND pa.status = 'disetujui'
+            AND a2.status = 'disetujui'
+            AND ad.tanggal BETWEEN a2.tanggal_mulai AND a2.tanggal_selesai
+          LIMIT 1
+        ) AS menggantikan
       FROM presensi ad
       WHERE ad.id_karyawan = ?
         AND (ad.jam_masuk IS NOT NULL OR ad.jam_keluar IS NOT NULL)
@@ -6534,7 +6544,8 @@ router.get('/attendance/history', authenticateToken, async (req, res) => {
         early_leave_minutes: row.early_leave_minutes ?? 0,
         break_minutes: countedBreakMinutes,
         data_istirahat: breakData,
-        leave_request_id: row.leave_request_id ?? null
+        leave_request_id: row.leave_request_id ?? null,
+        menggantikan: row.menggantikan ?? null
       };
     });
 
