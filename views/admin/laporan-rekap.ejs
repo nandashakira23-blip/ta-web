@@ -175,11 +175,9 @@
                     <div class="bg-dark-800 rounded-xl shadow-2xl overflow-hidden border border-brown-600/30">
                         <div class="flex justify-between items-center p-4 border-b border-brown-600/30">
                             <h3 class="text-lg font-bold text-white"><i class="fas fa-clipboard-check text-brown-400 mr-2"></i>Rekap Presensi Karyawan</h3>
-                            <% if (!(admin && admin.role === 'manager')) { %>
                             <button id="btnExportPresensi" class="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm shadow-lg">
                                 <i class="fas fa-file-excel mr-2"></i>Export Excel
                             </button>
-                            <% } %>
                         </div>
                         <div class="overflow-x-auto">
                             <table class="min-w-full divide-y divide-brown-600/30">
@@ -240,11 +238,9 @@
                     <div class="bg-dark-800 rounded-xl shadow-2xl overflow-hidden border border-brown-600/30">
                         <div class="flex justify-between items-center p-4 border-b border-brown-600/30">
                             <h3 class="text-lg font-bold text-white"><i class="fas fa-file-medical text-brown-400 mr-2"></i>Rekap Pengajuan Cuti/Izin/Sakit</h3>
-                            <% if (!(admin && admin.role === 'manager')) { %>
                             <button id="btnExportAbsensi" class="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg text-sm shadow-lg">
                                 <i class="fas fa-file-excel mr-2"></i>Export Excel
                             </button>
-                            <% } %>
                         </div>
                         <div class="overflow-x-auto">
                             <table class="min-w-full divide-y divide-brown-600/30">
@@ -354,7 +350,7 @@
             if (btnExportAbsensi) {
                 btnExportAbsensi.addEventListener('click', function () {
                     const params = new URLSearchParams(new FormData(document.getElementById('filterForm'))).toString();
-                    window.location.href = '/admin/laporan/export-absensi?' + params;
+                    window.location.href = '/admin/absensi/export?' + params;
                 });
             }
         });
