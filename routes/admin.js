@@ -988,7 +988,14 @@ router.post('/karyawan/reset', requireAuth, async (req, res) => {
 // Laporan Presensi (juga di-mount di /presensi sebagai alias dengan sidebar context berbeda)
 const laporanHandler = async (req, res) => {
     const isPresensiContext = req.path === '/presensi' || req.originalUrl.startsWith('/admin/presensi');
-    const { tanggal, filterType, startDate, endDate, month, year } = req.query;
+    let { tanggal, filterType, startDate, endDate, month, year } = req.query;
+    // Default: bulan berjalan biar laporan langsung berisi data (hari ini sering kosong)
+    if (!filterType && !tanggal && !startDate && !month && !year) {
+        const now = new Date();
+        filterType = 'month';
+        month = String(now.getMonth() + 1);
+        year = String(now.getFullYear());
+    }
     let whereClause = '';
     let queryParams = [];
     
@@ -1530,7 +1537,13 @@ router.get('/laporan', requireAuth, async (req, res) => {
 
 // Export Laporan Presensi ke Excel (khusus admin; manager read-only tanpa ekspor)
 router.get('/laporan/export', requireAuth, requireSuperAdmin, async (req, res) => {
-    const { tanggal, filterType, startDate, endDate, month, year } = req.query;
+    let { tanggal, filterType, startDate, endDate, month, year } = req.query;
+    if (!filterType && !tanggal && !startDate && !month && !year) {
+        const now = new Date();
+        filterType = 'month';
+        month = String(now.getMonth() + 1);
+        year = String(now.getFullYear());
+    }
     let whereClause = '';
     let queryParams = [];
     let filterInfo = {};
