@@ -61,18 +61,18 @@ async function seedDatabase() {
             `);
         }
 
-        // 2. Insert jabatan (job positions)
+        // 2. Insert jabatan (job positions) — kode format JAB-timestamp, statis
         console.log('Seeding jabatan...');
         await connection.execute(`
             INSERT INTO jabatan (kode, nama_jabatan, deskripsi, is_active) VALUES
-            ('MGR', 'Manager', 'Manajer operasional', TRUE),
-            ('BRS', 'Barista', 'Pembuat kopi dan minuman', TRUE),
-            ('CSR', 'Cashier', 'Kasir dan pelayanan', TRUE),
-            ('KST', 'Kitchen Staff', 'Staff dapur', TRUE),
-            ('WTR', 'Waitress', 'Pelayan', TRUE),
-            ('CLN', 'Cleaning Service', 'Petugas kebersihan', TRUE),
-            ('SCR', 'Security', 'Petugas keamanan', TRUE),
-            ('ADM', 'Admin', 'Staff administrasi', TRUE)
+            ('JAB-1782864001001', 'Manager', 'Manajer operasional', TRUE),
+            ('JAB-1782864002002', 'Barista', 'Pembuat kopi dan minuman', TRUE),
+            ('JAB-1782864003003', 'Cashier', 'Kasir dan pelayanan', TRUE),
+            ('JAB-1782864004004', 'Kitchen Staff', 'Staff dapur', TRUE),
+            ('JAB-1782864005005', 'Waitress', 'Pelayan', TRUE),
+            ('JAB-1782864006006', 'Cleaning Service', 'Petugas kebersihan', TRUE),
+            ('JAB-1782864007007', 'Security', 'Petugas keamanan', TRUE),
+            ('JAB-1782864008008', 'Admin', 'Staff administrasi', TRUE)
             ON DUPLICATE KEY UPDATE
                 nama_jabatan = VALUES(nama_jabatan),
                 deskripsi = VALUES(deskripsi),
@@ -158,14 +158,14 @@ async function seedDatabase() {
         // 5. Insert sample karyawan (employees)
         console.log('Seeding sample employees...');
         const employees = [
-            { nik: 'EMP001', nama: 'John Doe', kodeJabatan: 'BRS' },
-            { nik: 'EMP002', nama: 'Jane Smith', kodeJabatan: 'MGR' },
-            { nik: 'EMP003', nama: 'Bob Wilson', kodeJabatan: 'CSR' },
-            { nik: 'EMP004', nama: 'Alice Johnson', kodeJabatan: 'KST' },
-            { nik: 'EMP005', nama: 'Mike Brown', kodeJabatan: 'WTR' },
-            { nik: 'EMP006', nama: 'Sarah Davis', kodeJabatan: 'CLN' },
-            { nik: 'EMP007', nama: 'Tom Anderson', kodeJabatan: 'SCR' },
-            { nik: 'EMP008', nama: 'Lisa Wilson', kodeJabatan: 'ADM' }
+            { nik: 'EMP001', nama: 'John Doe', kodeJabatan: 'JAB-1782864002002' },
+            { nik: 'EMP002', nama: 'Jane Smith', kodeJabatan: 'JAB-1782864001001' },
+            { nik: 'EMP003', nama: 'Bob Wilson', kodeJabatan: 'JAB-1782864003003' },
+            { nik: 'EMP004', nama: 'Alice Johnson', kodeJabatan: 'JAB-1782864004004' },
+            { nik: 'EMP005', nama: 'Mike Brown', kodeJabatan: 'JAB-1782864005005' },
+            { nik: 'EMP006', nama: 'Sarah Davis', kodeJabatan: 'JAB-1782864006006' },
+            { nik: 'EMP007', nama: 'Tom Anderson', kodeJabatan: 'JAB-1782864007007' },
+            { nik: 'EMP008', nama: 'Lisa Wilson', kodeJabatan: 'JAB-1782864008008' }
         ];
 
         for (const employee of employees) {
