@@ -1375,7 +1375,16 @@ router.get('/presensi/karyawan/:id', requireAuth, async (req, res) => {
                 JSON_UNQUOTE(JSON_EXTRACT(p.data_masuk, '$.jarak_meter')) AS distance_in,
                 JSON_UNQUOTE(JSON_EXTRACT(p.data_keluar, '$.latitude')) AS lat_keluar,
                 JSON_UNQUOTE(JSON_EXTRACT(p.data_keluar, '$.longitude')) AS long_keluar,
-                JSON_UNQUOTE(JSON_EXTRACT(p.data_keluar, '$.jarak_meter')) AS distance_out
+                JSON_UNQUOTE(JSON_EXTRACT(p.data_keluar, '$.jarak_meter')) AS distance_out,
+                (SELECT ka.nama
+                   FROM permintaan_absensi pa
+                   JOIN absensi a ON a.id = pa.id_absensi
+                   JOIN karyawan ka ON ka.id = a.id_karyawan
+                   WHERE pa.id_pengganti = p.id_karyawan
+                     AND pa.status = 'disetujui'
+                     AND a.status = 'disetujui'
+                     AND p.tanggal BETWEEN a.tanggal_mulai AND a.tanggal_selesai
+                   LIMIT 1) AS menggantikan
             FROM presensi p
             WHERE p.id_karyawan = ? ${presensiFilter}
             ORDER BY p.tanggal DESC, p.jam_masuk DESC

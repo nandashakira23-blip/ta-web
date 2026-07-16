@@ -188,6 +188,9 @@
                                     <tr class="hover:bg-dark-700/40">
                                         <td class="px-4 py-3">
                                             <div class="font-medium text-white"><%= formatDateID(r.tanggal) %></div>
+                                            <% if (r.menggantikan) { %>
+                                                <span class="mt-1 inline-flex items-center gap-1 rounded-full border border-purple-600/50 bg-purple-900/50 px-2 py-0.5 text-[11px] text-purple-200"><i class="fas fa-user-friends"></i>Menggantikan <%= r.menggantikan %></span>
+                                            <% } %>
                                         </td>
                                         <td class="px-4 py-3 text-sm text-brown-200"><%= r.jam_masuk || '-' %></td>
                                         <td class="px-4 py-3 text-sm text-brown-200"><%= r.jam_keluar || '-' %></td>
