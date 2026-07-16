@@ -1542,7 +1542,7 @@ router.get('/laporan', requireAuth, async (req, res) => {
 });
 
 // Export Laporan Presensi ke Excel (khusus admin; manager read-only tanpa ekspor)
-router.get('/laporan/export', requireAuth, requireSuperAdmin, async (req, res) => {
+router.get('/laporan/export', requireAuth, async (req, res) => {
     let { tanggal, filterType, startDate, endDate, month, year } = req.query;
     if (!filterType && !tanggal && !startDate && !month && !year) {
         const now = new Date();
