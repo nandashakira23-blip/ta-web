@@ -1214,6 +1214,75 @@ router.get('/presensi', requireAuth, async (req, res) => {
 });
 
 // /admin/presensi/karyawan/:id → halaman detail riwayat presensi karyawan
+// Export Excel: Daftar Presensi (ringkasan per karyawan)
+router.get('/presensi/export', requireAuth, async (req, res) => {
+    try {
+        const { q, tanggal, filterType, startDate, endDate, month, year } = req.query;
+        const monthNames = ['','Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+        let presensiFilter = '';
+        let presensiParams = [];
+        let periodLabel = '';
+        if (filterType === 'range' && startDate && endDate) {
+            presensiFilter = 'AND DATE(p.tanggal) BETWEEN ? AND ?'; presensiParams = [startDate, endDate]; periodLabel = `${startDate} s/d ${endDate}`;
+        } else if (filterType === 'month' && month && year) {
+            presensiFilter = 'AND MONTH(p.tanggal) = ? AND YEAR(p.tanggal) = ?'; presensiParams = [month, year]; periodLabel = `${monthNames[Number(month)] || month} ${year}`;
+        } else if (filterType === 'year' && year) {
+            presensiFilter = 'AND YEAR(p.tanggal) = ?'; presensiParams = [year]; periodLabel = `Tahun ${year}`;
+        } else if (filterType === 'date' && tanggal) {
+            presensiFilter = 'AND DATE(p.tanggal) = ?'; presensiParams = [tanggal]; periodLabel = tanggal;
+        } else {
+            const today = new Date(); const m = today.getMonth() + 1; const y = today.getFullYear();
+            presensiFilter = 'AND MONTH(p.tanggal) = ? AND YEAR(p.tanggal) = ?'; presensiParams = [m, y]; periodLabel = `${monthNames[m]} ${y}`;
+        }
+        const whereClauses = ['e.deleted_at IS NULL'];
+        const whereParams = [];
+        if (q) { whereClauses.push(`(e.nama LIKE ? OR e.nik LIKE ? OR COALESCE(j.nama_jabatan,'') LIKE ?)`); const likeQ = `%${q}%`; whereParams.push(likeQ, likeQ, likeQ); }
+        const whereSql = whereClauses.join(' AND ');
+
+        const rows = await db.query(`
+            SELECT e.nik, e.nama, j.nama_jabatan, jk.nama AS jadwal_kerja, s.nama_shift,
+                   COALESCE(ps.total_hadir,0) AS total_hadir, COALESCE(ps.total_terlambat,0) AS total_terlambat, COALESCE(ps.total_presensi,0) AS total_presensi
+            FROM karyawan e
+            LEFT JOIN jabatan j ON e.id_jabatan = j.id
+            LEFT JOIN jadwal_kerja jk ON e.id_jadwal_kerja = jk.id
+            LEFT JOIN shift s ON s.id = COALESCE(e.shift_id, jk.shift_id)
+            LEFT JOIN (
+                SELECT p.id_karyawan, COUNT(*) AS total_presensi,
+                       SUM(CASE WHEN LOWER(p.status) IN ('hadir','present') THEN 1 ELSE 0 END) AS total_hadir,
+                       SUM(CASE WHEN LOWER(p.status) = 'late' THEN 1 ELSE 0 END) AS total_terlambat
+                FROM presensi p WHERE 1=1 ${presensiFilter} GROUP BY p.id_karyawan
+            ) ps ON ps.id_karyawan = e.id
+            WHERE ${whereSql}
+            ORDER BY e.nama ASC
+        `, [...presensiParams, ...whereParams]);
+
+        const columns = [
+            { key: 'no', header: 'No', width: 5, align: 'center' },
+            { key: 'nik', header: 'NIK', width: 20 },
+            { key: 'nama', header: 'Nama', width: 26 },
+            { key: 'jabatan', header: 'Jabatan', width: 20 },
+            { key: 'shift', header: 'Jadwal / Shift', width: 26 },
+            { key: 'total_hadir', header: 'Total Hadir', width: 12, align: 'center' },
+            { key: 'total_terlambat', header: 'Total Terlambat', width: 14, align: 'center' },
+            { key: 'total_presensi', header: 'Total Presensi', width: 14, align: 'center' }
+        ];
+        const data = rows.map((r, i) => ({
+            no: i + 1, nik: r.nik, nama: r.nama, jabatan: r.nama_jabatan || '-',
+            shift: [r.jadwal_kerja, r.nama_shift].filter(Boolean).join(' / ') || '-',
+            total_hadir: r.total_hadir, total_terlambat: r.total_terlambat, total_presensi: r.total_presensi
+        }));
+        const { generateSimpleExcel } = require('../utils/excel-export');
+        const buffer = await generateSimpleExcel({ title: 'Daftar Presensi Karyawan', periodLabel: `Periode: ${periodLabel}`, columns, rows: data });
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename="Daftar_Presensi.xlsx"');
+        res.send(buffer);
+    } catch (err) {
+        console.error('Export presensi error:', err);
+        req.flash('error', 'Gagal mengekspor daftar presensi');
+        res.redirect('/admin/presensi');
+    }
+});
+
 router.get('/presensi/karyawan/:id', requireAuth, async (req, res) => {
     const employeeId = req.params.id;
     const { page, limit } = getListParams(req, { defaultLimit: 15, maxLimit: 100 });
@@ -3168,6 +3237,65 @@ router.get('/absensi', requireAuth, async (req, res) => {
                 error: req.flash('error')
             }
         });
+    }
+});
+
+// Export Excel: Manajemen Absensi (cuti/izin/sakit)
+router.get('/absensi/export', requireAuth, async (req, res) => {
+    try {
+        const { q } = req.query;
+        const whereClauses = ['1=1'];
+        const queryParams = [];
+        if (q) {
+            whereClauses.push(`(e.nama LIKE ? OR e.nik LIKE ? OR lr.jenis LIKE ? OR lr.kategori LIKE ? OR lr.status LIKE ? OR COALESCE(lr.alasan,'') LIKE ?)`);
+            const likeQ = `%${q}%`; queryParams.push(likeQ, likeQ, likeQ, likeQ, likeQ, likeQ);
+        }
+        const whereSql = whereClauses.join(' AND ');
+
+        const requests = await db.query(`
+            SELECT lr.jenis, lr.kategori, lr.tanggal_mulai, lr.tanggal_selesai, lr.jam_mulai, lr.jam_selesai,
+                   lr.alasan, lr.status, e.nama AS nama_karyawan, e.nik, pengganti.nama AS nama_pengganti
+            FROM absensi lr
+            JOIN karyawan e ON e.id = lr.id_karyawan
+            LEFT JOIN permintaan_absensi pa ON pa.id_absensi = lr.id
+            LEFT JOIN karyawan pengganti ON pengganti.id = pa.id_pengganti
+            WHERE ${whereSql}
+            ORDER BY lr.created_at DESC
+        `, queryParams);
+
+        const statusLabel = (s) => ({
+            menunggu_pengganti: 'Menunggu Pengganti', ditolak_pengganti: 'Ditolak Pengganti',
+            menunggu_manager: 'Menunggu Manager', disetujui: 'Disetujui', ditolak: 'Ditolak', dibatalkan: 'Dibatalkan',
+            approved: 'Disetujui', rejected: 'Ditolak', pending: 'Menunggu'
+        }[s] || s || '-');
+        const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-CA') : '-';
+
+        const columns = [
+            { key: 'no', header: 'No', width: 5, align: 'center' },
+            { key: 'nik', header: 'NIK', width: 20 },
+            { key: 'nama', header: 'Nama', width: 24 },
+            { key: 'jenis', header: 'Jenis', width: 10 },
+            { key: 'kategori', header: 'Kategori', width: 12 },
+            { key: 'mulai', header: 'Tgl Mulai', width: 13, align: 'center' },
+            { key: 'selesai', header: 'Tgl Selesai', width: 13, align: 'center' },
+            { key: 'alasan', header: 'Alasan', width: 30 },
+            { key: 'pengganti', header: 'Pengganti', width: 20 },
+            { key: 'status', header: 'Status', width: 18 }
+        ];
+        const data = requests.map((r, i) => ({
+            no: i + 1, nik: r.nik, nama: r.nama_karyawan, jenis: r.jenis, kategori: r.kategori,
+            mulai: fmtDate(r.tanggal_mulai), selesai: fmtDate(r.tanggal_selesai), alasan: r.alasan || '-',
+            pengganti: r.nama_pengganti || '-', status: statusLabel(r.status)
+        }));
+        const { generateSimpleExcel } = require('../utils/excel-export');
+        const buffer = await generateSimpleExcel({ title: 'Manajemen Absensi (Cuti/Izin/Sakit)', periodLabel: `Diekspor: ${getCurrentDateWITA()}`, columns, rows: data });
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename="Manajemen_Absensi.xlsx"');
+        res.send(buffer);
+    } catch (err) {
+        console.error('Export absensi error:', err);
+        req.flash('error', 'Gagal mengekspor data absensi');
+        res.redirect('/admin/absensi');
     }
 });
 

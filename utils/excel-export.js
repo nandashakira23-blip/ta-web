@@ -252,6 +252,68 @@ async function generateAttendanceExcel(data, filter, officeSetting) {
   return buffer;
 }
 
+/**
+ * Generate Excel sederhana (generic) untuk laporan tabel apa pun.
+ * @param {Object} opts
+ * @param {string} opts.title - Judul di baris atas
+ * @param {string} [opts.periodLabel] - Sub-judul (mis. periode/keterangan)
+ * @param {Array<{key:string, header:string, width?:number, align?:string}>} opts.columns
+ * @param {Array<Object>} opts.rows - Data (properti sesuai columns[].key)
+ * @returns {Promise<Buffer>}
+ */
+async function generateSimpleExcel({ title, periodLabel, columns, rows }) {
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet('Data');
+  const lastCol = columns.length;
+  const thin = { style: 'thin', color: { argb: 'FF999999' } };
+  const border = { top: thin, bottom: thin, left: thin, right: thin };
+
+  columns.forEach((c, i) => { worksheet.getColumn(i + 1).width = c.width || 18; });
+
+  // Judul
+  worksheet.mergeCells(1, 1, 1, lastCol);
+  const titleCell = worksheet.getCell(1, 1);
+  titleCell.value = title;
+  titleCell.font = { bold: true, size: 14 };
+  titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+  let headerRowIdx = 3;
+  if (periodLabel) {
+    worksheet.mergeCells(2, 1, 2, lastCol);
+    const subCell = worksheet.getCell(2, 1);
+    subCell.value = periodLabel;
+    subCell.alignment = { horizontal: 'center' };
+    headerRowIdx = 4;
+  }
+
+  // Header kolom
+  const headerRow = worksheet.getRow(headerRowIdx);
+  columns.forEach((c, i) => {
+    const cell = headerRow.getCell(i + 1);
+    cell.value = c.header;
+    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF8B5E3C' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    cell.border = border;
+  });
+
+  // Data
+  rows.forEach((row, ri) => {
+    const r = worksheet.getRow(headerRowIdx + 1 + ri);
+    columns.forEach((c, ci) => {
+      const cell = r.getCell(ci + 1);
+      const v = row[c.key];
+      cell.value = (v === null || v === undefined) ? '' : v;
+      cell.alignment = { horizontal: c.align || 'left', vertical: 'middle', wrapText: true };
+      cell.border = border;
+    });
+  });
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  return buffer;
+}
+
 module.exports = {
-  generateAttendanceExcel
+  generateAttendanceExcel,
+  generateSimpleExcel
 };
