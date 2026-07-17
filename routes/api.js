@@ -4848,19 +4848,49 @@ router.post('/attendance/checkin', (req, res, next) => {
         });
       }
       
+      // Pengganti (disetujui) boleh clock-in lebih awal: ikut jam masuk shift orang yang
+      // digantikan (tetap buffer 30 menit). Karyawan biasa tetap pakai window shift sendiri.
+      let effectiveClockInStart = attendanceWindows.clock_in_start;
+      try {
+        const [coverRows] = await connection.execute(`
+          SELECT s.jam_masuk AS jam_masuk
+          FROM permintaan_absensi pa
+          JOIN absensi ab ON ab.id = pa.id_absensi
+          JOIN karyawan k ON k.id = ab.id_karyawan
+          LEFT JOIN jadwal_kerja jk ON k.id_jadwal_kerja = jk.id
+          LEFT JOIN shift s ON s.id = COALESCE(k.shift_id, jk.shift_id)
+          WHERE pa.id_pengganti = ?
+            AND pa.status = 'disetujui'
+            AND ab.status = 'disetujui'
+            AND ? BETWEEN ab.tanggal_mulai AND ab.tanggal_selesai
+            AND s.jam_masuk IS NOT NULL
+          ORDER BY s.jam_masuk ASC
+          LIMIT 1
+        `, [req.user.id, today]);
+        if (coverRows.length > 0 && coverRows[0].jam_masuk) {
+          const coveredStart = addMinutesToTime(coverRows[0].jam_masuk, -30);
+          // pakai window paling awal biar pengganti bisa nutupin dari awal shift yang digantikan
+          if (effectiveClockInStart && coveredStart < effectiveClockInStart) {
+            effectiveClockInStart = coveredStart;
+          }
+        }
+      } catch (coverErr) {
+        console.error('[clock-in] gagal cek jadwal pengganti:', coverErr.message);
+      }
+
       // VALIDASI: Check-in hanya bisa dilakukan dalam window waktu yang ditentukan
-      if (!bypassScheduleValidation && !isTimeInRange(currentTime, attendanceWindows.clock_in_start, attendanceWindows.clock_in_end)) {
+      if (!bypassScheduleValidation && !isTimeInRange(currentTime, effectiveClockInStart, attendanceWindows.clock_in_end)) {
         if (fs.existsSync(req.file.path)) {
           fs.unlinkSync(req.file.path);
         }
-        
+
         return res.status(400).json({
           success: false,
-          message: `Check-in hanya bisa dilakukan antara jam ${attendanceWindows.clock_in_start.substring(0,5)} - ${attendanceWindows.clock_in_end.substring(0,5)}`,
+          message: `Check-in hanya bisa dilakukan antara jam ${effectiveClockInStart.substring(0,5)} - ${attendanceWindows.clock_in_end.substring(0,5)}`,
           code: 'OUTSIDE_CHECKIN_WINDOW',
           data: {
             currentTime: currentTime.substring(0,5),
-            allowedStart: attendanceWindows.clock_in_start.substring(0,5),
+            allowedStart: effectiveClockInStart.substring(0,5),
             allowedEnd: attendanceWindows.clock_in_end.substring(0,5),
             scheduleName: schedule.nama
           }
