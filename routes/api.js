@@ -499,6 +499,9 @@ function isDevelopmentMode() {
 }
 
 async function isDevScheduleBypassEnabled() {
+  // Kalau ENFORCE_SCHEDULE=true, presensi WAJIB mengikuti jadwal shift (bypass dimatikan),
+  // walaupun server berjalan di mode development. Default: ikut mode development.
+  if (String(process.env.ENFORCE_SCHEDULE || '').toLowerCase() === 'true') return false;
   return isDevelopmentMode();
 }
 
