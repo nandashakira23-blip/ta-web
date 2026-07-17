@@ -4852,8 +4852,13 @@ router.post('/attendance/checkin', (req, res, next) => {
       // digantikan (tetap buffer 30 menit). Karyawan biasa tetap pakai window shift sendiri.
       let effectiveClockInStart = attendanceWindows.clock_in_start;
       try {
+        // Pengganti diatur jauh hari (dibuat sebelum tanggal coveran) -> buffer 30 menit.
+        // Pengganti diatur hari-H (tanggal pembuatan sama dengan hari ini) -> buffer 15 menit.
+        // created_at tersimpan UTC, dikonversi ke WITA (+08:00) dulu agar banding tanggalnya akurat.
         const [coverRows] = await connection.execute(`
-          SELECT s.jam_masuk AS jam_masuk
+          SELECT
+            s.jam_masuk AS jam_masuk,
+            (DATE(CONVERT_TZ(pa.created_at, '+00:00', '+08:00')) < ?) AS is_advance
           FROM permintaan_absensi pa
           JOIN absensi ab ON ab.id = pa.id_absensi
           JOIN karyawan k ON k.id = ab.id_karyawan
@@ -4866,9 +4871,11 @@ router.post('/attendance/checkin', (req, res, next) => {
             AND s.jam_masuk IS NOT NULL
           ORDER BY s.jam_masuk ASC
           LIMIT 1
-        `, [req.user.id, today]);
+        `, [today, req.user.id, today]);
         if (coverRows.length > 0 && coverRows[0].jam_masuk) {
-          const coveredStart = addMinutesToTime(coverRows[0].jam_masuk, -30);
+          // Jauh hari = 30 menit, hari-H = 15 menit sebelum jam masuk shift yang digantikan.
+          const bufferMin = Number(coverRows[0].is_advance) === 1 ? 30 : 15;
+          const coveredStart = addMinutesToTime(coverRows[0].jam_masuk, -bufferMin);
           // pakai window paling awal biar pengganti bisa nutupin dari awal shift yang digantikan
           if (effectiveClockInStart && coveredStart < effectiveClockInStart) {
             effectiveClockInStart = coveredStart;
