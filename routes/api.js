@@ -6523,16 +6523,8 @@ router.get('/attendance/history', authenticateToken, async (req, res) => {
       const dataKeluar = parseJsonColumn(row.data_keluar);
       const breakData = extractBreakFromDataMasuk(row.data_masuk);
       const countedBreakMinutes = getStoredOrCountedBreakMinutes(breakData, breakAllowanceMinutes);
-      const effectiveWorkMinutes = row.clock_out_time
-        ? Math.max(
-          0,
-          Number(row.total_work_minutes || 0)
-          + Number(row.approved_leave_minutes || 0)
-          - Number(row.late_minutes || 0)
-          - Number(row.early_leave_minutes || 0)
-          - countedBreakMinutes
-        )
-        : Number(row.effective_work_minutes ?? 0);
+      // Efektif diambil dari nilai tersimpan (dihitung benar saat clock-out; lihat utils/worktime.js).
+      const effectiveWorkMinutes = Number(row.effective_work_minutes ?? 0);
       // Simple status: only "Tepat Waktu" or "Terlambat"
       // If no clock in/out, record won't appear (filtered by WHERE clause)
       let status = 'present';

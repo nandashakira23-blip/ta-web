@@ -1,3 +1,6 @@
+// Lembur minimal (menit) sebelum diakui: kelebihan jam kerja < 1 jam tidak dihitung lembur.
+const OVERTIME_MIN_MINUTES = 60;
+
 function toMinutes(timeValue) {
     if (!timeValue) return null;
     const [hours, minutes, seconds] = String(timeValue).split(':').map(Number);
@@ -29,14 +32,32 @@ function calculateWorkSummary({ schedule, checkInTime, checkOutTime, leaveMinute
     const scheduledMinutes = diffMinutes(scheduledStart, scheduledEnd);
     const lateMinutes = Math.max(0, (actualStart ?? 0) - (scheduledStart ?? 0));
     const earlyLeaveMinutes = Math.max(0, (scheduledEnd ?? 0) - (actualEnd ?? 0));
-    const overtimeMinutes = Math.max(0, (actualEnd ?? 0) - (scheduledEnd ?? 0));
-    const effectiveWorkMinutes = Math.max(0, totalWorkMinutes + leaveMinutes - lateMinutes - earlyLeaveMinutes - Number(breakMinutes || 0));
+    const breakM = Number(breakMinutes || 0);
+
+    // Lembur: hanya waktu kerja SETELAH jam pulang shift; baru diakui bila total kelebihan >= 1 jam.
+    let overtimeMinutes = 0;
+    if (actualEnd != null && scheduledEnd != null) {
+        const overtimeStart = Math.max(actualStart ?? 0, scheduledEnd);
+        const rawOvertime = Math.max(0, actualEnd - overtimeStart);
+        overtimeMinutes = rawOvertime >= OVERTIME_MIN_MINUTES ? rawOvertime : 0;
+    }
+
+    // Efektif: irisan (overlap) jam kerja aktual dengan jadwal shift, + izin disetujui, - istirahat.
+    let effectiveWorkMinutes;
+    if (scheduledStart != null && scheduledEnd != null && actualStart != null && actualEnd != null) {
+        const overlapStart = Math.max(actualStart, scheduledStart);
+        const overlapEnd = Math.min(actualEnd, scheduledEnd);
+        const inShiftMinutes = Math.max(0, overlapEnd - overlapStart);
+        effectiveWorkMinutes = Math.max(0, inShiftMinutes + leaveMinutes - breakM);
+    } else {
+        effectiveWorkMinutes = Math.max(0, totalWorkMinutes + leaveMinutes - breakM);
+    }
 
     return {
         scheduledMinutes,
         totalWorkMinutes,
         approvedLeaveMinutes: leaveMinutes,
-        breakMinutes: Number(breakMinutes || 0),
+        breakMinutes: breakM,
         lateMinutes,
         earlyLeaveMinutes,
         overtimeMinutes,
