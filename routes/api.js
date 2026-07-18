@@ -6708,16 +6708,8 @@ router.get('/attendance/summary', authenticateToken, async (req, res) => {
       const status = String(row.status || '').toLowerCase();
       const breakData = extractBreakFromDataMasuk(row.data_masuk);
       const countedBreakMinutes = getStoredOrCountedBreakMinutes(breakData, breakAllowanceMinutes);
-      const effectiveWorkMinutes = row.jam_keluar
-        ? Math.max(
-          0,
-          Number(row.total_work_minutes || 0)
-          + Number(row.approved_leave_minutes || 0)
-          - Number(row.late_minutes || 0)
-          - Number(row.early_leave_minutes || 0)
-          - countedBreakMinutes
-        )
-        : Number(row.effective_work_minutes || row.total_work_minutes || 0);
+      // Efektif diambil dari nilai tersimpan (dihitung benar saat clock-out; lihat utils/worktime.js).
+      const effectiveWorkMinutes = Number(row.effective_work_minutes ?? 0);
       if (status === 'late') {
         lateDays += 1;
         presentDays += 1;
