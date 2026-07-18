@@ -3785,6 +3785,14 @@ router.post('/leave-requests', authenticateToken, leaveUpload.single('lampiran')
         jam_mulai,
         jam_selesai
       });
+      if (!durationMinutes || durationMinutes <= 0) {
+        await discardUploadedFile(req.file);
+        return res.status(400).json({
+          success: false,
+          message: 'Jam selesai harus lebih besar dari jam mulai',
+          code: 'INVALID_PARTIAL_TIME'
+        });
+      }
     } else {
       const startDate = new Date(`${tanggal_mulai}T00:00:00`);
       const endDate = new Date(`${tanggal_selesai}T00:00:00`);

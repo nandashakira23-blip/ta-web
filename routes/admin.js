@@ -14,6 +14,7 @@ const {
     listBlobFilesByPrefixes,
     persistUploadedFile
 } = require('../utils/upload-storage');
+const { recalcPresensiForLeave } = require('../utils/presensi-recalc');
 
 // Wrapper to make db.query work with both callbacks and promises
 const db = {
@@ -3497,6 +3498,14 @@ router.post(['/ketidakhadiran/:id/approve', '/absensi/:id/approve'], requireAuth
         if (!result.affectedRows) {
             req.flash('error', 'Pengajuan sudah diproses akun lain');
             return res.redirect(redirectTarget);
+        }
+
+        // Izin bisa disetujui SETELAH karyawan clock-out; hitung ulang presensi terkait
+        // agar izin ikut masuk ke jam kerja efektif yang tersimpan.
+        try {
+            await recalcPresensiForLeave(dbOriginal, req.params.id);
+        } catch (recalcErr) {
+            console.error('Gagal recompute presensi setelah approve izin:', recalcErr.message);
         }
 
         req.flash('success', 'Pengajuan berhasil disetujui');
