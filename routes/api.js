@@ -768,17 +768,13 @@ function calculateCountedBreakMinutes(breakData, breakAllowanceMinutes = DEFAULT
   const sessions = Array.isArray(breakData?.sesi) ? breakData.sesi : [];
   if (sessions.length === 0) return 0;
 
-  const allowanceMinutes = normalizeBreakAllowanceMinutes(
-    breakData?.durasi_istirahat_menit || breakAllowanceMinutes
-  );
   const activeIndex = includeActive ? getActiveBreakSessionIndex(breakData) : -1;
   const activeSession = activeIndex >= 0 ? breakData.sesi[activeIndex] : null;
   const activeDurationMinutes = activeSession
     ? diffDateTimeMinutes(activeSession.mulai, getCurrentDateTimeWITA())
     : 0;
-  const actualMinutes = Number(breakData.total_menit || 0) + activeDurationMinutes;
-
-  return Math.max(actualMinutes, allowanceMinutes);
+  // Istirahat yang dipotong = lama istirahat AKTUAL (bukan dipaksa minimal jatah).
+  return Number(breakData.total_menit || 0) + activeDurationMinutes;
 }
 
 function getStoredOrCountedBreakMinutes(breakData, breakAllowanceMinutes = DEFAULT_BREAK_ALLOWANCE_MINUTES) {
