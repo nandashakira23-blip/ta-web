@@ -211,11 +211,20 @@
                                             <% const fmtMin = (m) => { m = Number(m||0); const h = Math.floor(m/60), mm = m%60; return (h ? h+'j ' : '') + mm + 'm'; }; %>
                                             <div class="font-medium text-white">Efektif: <%= r.jam_keluar ? fmtMin(r.effective_work_minutes) : '-' %></div>
                                             <div class="text-xs text-brown-300">Total: <%= fmtMin(r.total_work_minutes) %></div>
-                                            <div class="mt-1 flex flex-wrap gap-1">
-                                                <% if (Number(r.late_minutes)>0){ %><span class="rounded bg-yellow-900/50 px-1.5 py-0.5 text-[10px] text-yellow-200">Telat <%= r.late_minutes %>m</span><% } %>
-                                                <% if (Number(r.early_leave_minutes)>0){ %><span class="rounded bg-orange-900/50 px-1.5 py-0.5 text-[10px] text-orange-200">Plg awal <%= r.early_leave_minutes %>m</span><% } %>
-                                                <% if (Number(r.overtime_minutes)>0){ %><span class="rounded bg-blue-900/50 px-1.5 py-0.5 text-[10px] text-blue-200">Lembur <%= r.overtime_minutes %>m</span><% } %>
-                                                <% if (Number(r.approved_leave_minutes)>0){ %><span class="rounded bg-green-900/50 px-1.5 py-0.5 text-[10px] text-green-200">Izin <%= r.approved_leave_minutes %>m</span><% } %>
+                                            <div class="mt-1.5 flex flex-wrap gap-1.5">
+                                                <%
+                                                    // Badge selalu tampil (walau 0): redup kalau 0, berwarna kalau ada nilainya.
+                                                    const chip = (label, icon, val, activeStyle) => {
+                                                        const v = Number(val || 0);
+                                                        const style = v > 0 ? activeStyle : 'background:rgba(255,255,255,.04);color:#a2917c;border-color:rgba(255,255,255,.09)';
+                                                        return '<span style="display:inline-flex;align-items:center;gap:4px;border-radius:9999px;padding:2px 9px;font-size:10px;line-height:1.4;font-weight:600;border:1px solid;' + style + '">'
+                                                            + '<i class="fas ' + icon + '" style="font-size:9px;opacity:.85"></i>' + label + ' ' + fmtMin(v) + '</span>';
+                                                    };
+                                                %>
+                                                <%- chip('Telat', 'fa-clock', r.late_minutes, 'background:rgba(234,179,8,.16);color:#fde047;border-color:rgba(234,179,8,.4)') %>
+                                                <%- chip('Plg awal', 'fa-door-open', r.early_leave_minutes, 'background:rgba(249,115,22,.16);color:#fdba74;border-color:rgba(249,115,22,.4)') %>
+                                                <%- chip('Lembur', 'fa-hourglass-half', r.overtime_minutes, 'background:rgba(59,130,246,.16);color:#93c5fd;border-color:rgba(59,130,246,.4)') %>
+                                                <%- chip('Izin', 'fa-calendar-check', r.approved_leave_minutes, 'background:rgba(34,197,94,.16);color:#86efac;border-color:rgba(34,197,94,.4)') %>
                                             </div>
                                         </td>
                                         <td class="px-4 py-3 text-center text-sm text-brown-200">
