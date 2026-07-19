@@ -3738,7 +3738,12 @@ router.post('/leave-requests', authenticateToken, leaveUpload.single('lampiran')
       });
     }
 
-    const normalizedCategory = kategori || 'full_day';
+    // Sinkron dengan form: kategori ditentukan dari ada/tidaknya jam.
+    //   jam diisi  -> izin per-jam (partial, durasi = selisih jam)
+    //   jam kosong -> izin seharian (full_day)
+    // kategori eksplisit (mis. dari web) tetap dihormati bila dikirim.
+    const hasPartialTime = !!(jam_mulai && jam_selesai);
+    const normalizedCategory = kategori || (hasPartialTime ? 'hourly' : 'full_day');
     const replacementId = id_pengganti ? Number.parseInt(id_pengganti, 10) : null;
     if (replacementId && replacementId === req.user.id) {
       await discardUploadedFile(req.file);
