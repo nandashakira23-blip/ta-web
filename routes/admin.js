@@ -3698,14 +3698,19 @@ router.get('/testing/probe/:pid/:type', requireAuth, requireSuperAdmin, (req, re
             if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
 
             let out = null;
+            let tmpFile = null;
             try {
                 const { detectFaces } = require('../utils/face-recognition');
                 const { createCanvas, loadImage } = require('canvas');
-                const faces = await detectFaces(src); // deteksi wajah (box dalam koordinat ter-orientasi)
+                // Downscale (maks 1024px) SEBELUM deteksi CNN -> tekan pemakaian memori biar
+                // banyak thumbnail bisa digenerate tanpa bikin RAM meledak (OOM).
+                const orientedBuf = await sharp(src).rotate().resize(1024, 1024, { fit: 'inside', withoutEnlargement: true }).toBuffer();
+                tmpFile = path.join(cacheDir, 'tmp-probe-' + pid + '-' + type + '-' + Date.now() + '.jpg');
+                fs.writeFileSync(tmpFile, orientedBuf);
+                const faces = await detectFaces(tmpFile); // box dalam koordinat gambar ter-downscale
                 if (faces && faces.length && faces[0].box) {
                     const box = faces[0].box;
-                    const orientedBuf = await sharp(src).rotate().toBuffer();
-                    const img = await loadImage(orientedBuf);
+                    const img = await loadImage(orientedBuf); // gambar SAMA (ter-downscale) -> koordinat box cocok
                     const cx = (box.xMin + box.xMax) / 2, cy = (box.yMin + box.yMax) / 2;
                     // crop PERSEGI rapat ke wajah (zoom), tidak melebihi ukuran gambar
                     let side = Math.round(Math.max(box.width, box.height) * 1.35);
@@ -3725,6 +3730,8 @@ router.get('/testing/probe/:pid/:type', requireAuth, requireSuperAdmin, (req, re
                 }
             } catch (e) {
                 console.warn('probe face-detect/draw gagal, pakai crop biasa:', e.message);
+            } finally {
+                if (tmpFile) { try { fs.unlinkSync(tmpFile); } catch (e) {} }
             }
             if (!out) { // fallback: crop otomatis kalau wajah tak terdeteksi
                 out = await sharp(src).rotate().resize(480, 480, { fit: 'cover', position: 'attention' }).jpeg({ quality: 90 }).toBuffer();
