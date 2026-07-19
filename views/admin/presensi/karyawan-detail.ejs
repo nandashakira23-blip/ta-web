@@ -195,8 +195,14 @@
                                                 <span class="mt-1 inline-flex items-center gap-1 rounded-full border border-purple-600/50 bg-purple-900/50 px-2 py-0.5 text-[11px] text-purple-200"><i class="fas fa-user-friends"></i>Menggantikan <%= r.menggantikan %></span>
                                             <% } %>
                                         </td>
-                                        <td class="px-4 py-3 text-sm text-brown-200"><%= r.jam_masuk || '-' %></td>
-                                        <td class="px-4 py-3 text-sm text-brown-200"><%= r.jam_keluar || '-' %></td>
+                                        <td class="px-4 py-3 text-sm text-brown-200">
+                                            <div><%= r.jam_masuk || '-' %></div>
+                                            <% if (r.jam_masuk && r.sim_in != null && r.sim_in !== '' && !isNaN(Number(r.sim_in))) { %><div class="text-[10px] text-brown-400 mt-0.5" title="Kemiripan wajah saat clock-in"><i class="fas fa-smile mr-0.5"></i>Wajah <%= Math.round(Number(r.sim_in)*100) %>%</div><% } %>
+                                        </td>
+                                        <td class="px-4 py-3 text-sm text-brown-200">
+                                            <div><%= r.jam_keluar || '-' %></div>
+                                            <% if (r.jam_keluar && r.sim_out != null && r.sim_out !== '' && !isNaN(Number(r.sim_out))) { %><div class="text-[10px] text-brown-400 mt-0.5" title="Kemiripan wajah saat clock-out"><i class="fas fa-smile mr-0.5"></i>Wajah <%= Math.round(Number(r.sim_out)*100) %>%</div><% } %>
+                                        </td>
                                         <td class="px-4 py-3">
                                             <% const st = String(r.status || '').toLowerCase(); %>
                                             <% if (['hadir','present'].includes(st)) { %>
@@ -225,6 +231,7 @@
                                                 <%- chip('Plg awal', 'fa-door-open', r.early_leave_minutes, 'background:rgba(249,115,22,.16);color:#fdba74;border-color:rgba(249,115,22,.4)') %>
                                                 <%- chip('Lembur', 'fa-hourglass-half', r.overtime_minutes, 'background:rgba(59,130,246,.16);color:#93c5fd;border-color:rgba(59,130,246,.4)') %>
                                                 <%- chip('Izin', 'fa-calendar-check', r.approved_leave_minutes, 'background:rgba(34,197,94,.16);color:#86efac;border-color:rgba(34,197,94,.4)') %>
+                                                <%- chip('Istirahat', 'fa-mug-hot', r.break_minutes, 'background:rgba(20,184,166,.16);color:#5eead4;border-color:rgba(20,184,166,.4)') %>
                                             </div>
                                         </td>
                                         <td class="px-4 py-3 text-center text-sm text-brown-200">

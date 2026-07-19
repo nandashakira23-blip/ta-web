@@ -1390,6 +1390,9 @@ router.get('/presensi/karyawan/:id', requireAuth, async (req, res) => {
                 JSON_UNQUOTE(JSON_EXTRACT(p.data_keluar, '$.latitude')) AS lat_keluar,
                 JSON_UNQUOTE(JSON_EXTRACT(p.data_keluar, '$.longitude')) AS long_keluar,
                 JSON_UNQUOTE(JSON_EXTRACT(p.data_keluar, '$.jarak_meter')) AS distance_out,
+                JSON_UNQUOTE(JSON_EXTRACT(p.data_masuk, '$.istirahat.dihitung_menit')) AS break_minutes,
+                JSON_UNQUOTE(JSON_EXTRACT(p.data_masuk, '$.face_similarity')) AS sim_in,
+                JSON_UNQUOTE(JSON_EXTRACT(p.data_keluar, '$.face_similarity')) AS sim_out,
                 (SELECT ka.nama
                    FROM permintaan_absensi pa
                    JOIN absensi a ON a.id = pa.id_absensi
