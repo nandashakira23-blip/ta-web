@@ -1,7 +1,8 @@
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
 
-const appBaseUrl = process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
+const publicUrl = process.env.APP_PUBLIC_URL || 'https://fleurpresensi.online';
+const localUrl = `http://localhost:${process.env.PORT || 3000}`;
 
 const options = {
   definition: {
@@ -17,8 +18,12 @@ const options = {
     },
     servers: [
       {
-        url: appBaseUrl,
-        description: process.env.NODE_ENV === 'production' ? 'Production server' : 'Active server'
+        url: publicUrl,
+        description: 'Production (HTTPS) - fleurpresensi.online'
+      },
+      {
+        url: localUrl,
+        description: 'Local / dev'
       }
     ],
     components: {
