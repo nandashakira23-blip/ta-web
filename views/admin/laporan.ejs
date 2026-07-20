@@ -156,9 +156,13 @@
                         <!-- Filter Type Selection -->
                         <div class="mb-4">
                             <label class="block text-sm font-medium text-brown-300 mb-2">Tipe Filter</label>
-                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                <button type="button" onclick="setFilterType('date', this)" 
-                                        class="filter-type-btn px-4 py-2 rounded-lg border transition duration-200 <%= filter.filterType === 'date' || !filter.filterType ? 'bg-brown-600 border-brown-500 text-white' : 'bg-dark-700 border-brown-600/50 text-brown-300 hover:bg-dark-600' %>">
+                            <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                                <button type="button" onclick="setFilterType('week', this)"
+                                        class="filter-type-btn px-4 py-2 rounded-lg border transition duration-200 <%= filter.filterType === 'week' || !filter.filterType ? 'bg-brown-600 border-brown-500 text-white' : 'bg-dark-700 border-brown-600/50 text-brown-300 hover:bg-dark-600' %>">
+                                    <i class="fas fa-calendar-week mr-2"></i>Minggu Ini
+                                </button>
+                                <button type="button" onclick="setFilterType('date', this)"
+                                        class="filter-type-btn px-4 py-2 rounded-lg border transition duration-200 <%= filter.filterType === 'date' ? 'bg-brown-600 border-brown-500 text-white' : 'bg-dark-700 border-brown-600/50 text-brown-300 hover:bg-dark-600' %>">
                                     <i class="fas fa-calendar-day mr-2"></i>Tanggal
                                 </button>
                                 <button type="button" onclick="setFilterType('range', this)" 
@@ -176,10 +180,15 @@
                             </div>
                         </div>
 
-                        <input type="hidden" name="filterType" id="filterType" value="<%= filter.filterType || 'date' %>">
+                        <input type="hidden" name="filterType" id="filterType" value="<%= filter.filterType || 'week' %>">
+
+                        <!-- Week Filter (minggu berjalan, otomatis) -->
+                        <div id="weekFilter" class="filter-content <%= filter.filterType === 'week' || !filter.filterType ? '' : 'hidden' %>">
+                            <p class="text-sm text-brown-300"><i class="fas fa-info-circle mr-1"></i>Menampilkan data <strong class="text-white">minggu ini</strong> (Senin–Minggu berjalan). Untuk periode lain, pilih tipe filter di atas.</p>
+                        </div>
 
                         <!-- Date Filter -->
-                        <div id="dateFilter" class="filter-content <%= filter.filterType === 'date' || !filter.filterType ? '' : 'hidden' %>">
+                        <div id="dateFilter" class="filter-content <%= filter.filterType === 'date' ? '' : 'hidden' %>">
                             <label for="tanggal" class="block text-sm font-medium text-brown-300 mb-2">Pilih Tanggal</label>
                             <input type="date" id="tanggal" name="tanggal" value="<%= filter.tanggal %>"
                                    class="w-full px-4 py-2 bg-dark-700 border border-brown-600/50 rounded-lg focus:ring-2 focus:ring-brown-500 focus:border-brown-400 transition duration-200 text-white">
@@ -820,7 +829,9 @@
             document.querySelectorAll('.filter-content').forEach(el => el.classList.add('hidden'));
             
             // Show selected filter content
-            if (type === 'date') {
+            if (type === 'week') {
+                document.getElementById('weekFilter').classList.remove('hidden');
+            } else if (type === 'date') {
                 document.getElementById('dateFilter').classList.remove('hidden');
             } else if (type === 'range') {
                 document.getElementById('rangeFilter').classList.remove('hidden');

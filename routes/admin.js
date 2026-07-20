@@ -1441,7 +1441,18 @@ router.get('/presensi/karyawan/:id', requireAuth, async (req, res) => {
 
 // /admin/laporan → halaman Laporan dengan 2 tab (Laporan Presensi + Laporan Absensi)
 router.get('/laporan', requireAuth, async (req, res) => {
-    const { tanggal, filterType, startDate, endDate, month, year } = req.query;
+    let { tanggal, filterType, startDate, endDate, month, year } = req.query;
+    // Default: minggu berjalan (Senin-Minggu) biar laporan langsung berisi data
+    if (!filterType && !tanggal && !startDate && !month && !year) {
+        filterType = 'week';
+    }
+    // Batas minggu berjalan (berbasis tanggal WITA)
+    const _wt = new Date(getCurrentDateWITA() + 'T00:00:00Z');
+    const _dow = (_wt.getUTCDay() + 6) % 7; // Senin = 0
+    const _mon = new Date(_wt); _mon.setUTCDate(_wt.getUTCDate() - _dow);
+    const _sun = new Date(_mon); _sun.setUTCDate(_mon.getUTCDate() + 6);
+    const weekStart = _mon.toISOString().slice(0, 10);
+    const weekEnd = _sun.toISOString().slice(0, 10);
     // Pagination per-tab via query param pp (presensi page) dan ap (absensi page)
     const presensiPage = Math.max(1, Number.parseInt(req.query.pp, 10) || 1);
     const absensiPage = Math.max(1, Number.parseInt(req.query.ap, 10) || 1);
@@ -1453,7 +1464,12 @@ router.get('/laporan', requireAuth, async (req, res) => {
     let absensiWhere = '';
     let absensiParams = [];
 
-    if (filterType === 'range' && startDate && endDate) {
+    if (filterType === 'week') {
+        presensiWhere = 'WHERE DATE(p.tanggal) BETWEEN ? AND ?';
+        presensiParams = [weekStart, weekEnd];
+        absensiWhere = 'WHERE (DATE(lr.tanggal_mulai) BETWEEN ? AND ? OR DATE(lr.tanggal_selesai) BETWEEN ? AND ?)';
+        absensiParams = [weekStart, weekEnd, weekStart, weekEnd];
+    } else if (filterType === 'range' && startDate && endDate) {
         presensiWhere = 'WHERE DATE(p.tanggal) BETWEEN ? AND ?';
         presensiParams = [startDate, endDate];
         absensiWhere = 'WHERE DATE(lr.tanggal_mulai) BETWEEN ? AND ? OR DATE(lr.tanggal_selesai) BETWEEN ? AND ?';
@@ -1549,17 +1565,25 @@ router.get('/laporan', requireAuth, async (req, res) => {
 router.get('/laporan/export', requireAuth, async (req, res) => {
     let { tanggal, filterType, startDate, endDate, month, year } = req.query;
     if (!filterType && !tanggal && !startDate && !month && !year) {
-        const now = new Date();
-        filterType = 'month';
-        month = String(now.getMonth() + 1);
-        year = String(now.getFullYear());
+        filterType = 'week';
     }
+    // Batas minggu berjalan (berbasis tanggal WITA)
+    const _wt = new Date(getCurrentDateWITA() + 'T00:00:00Z');
+    const _dow = (_wt.getUTCDay() + 6) % 7;
+    const _mon = new Date(_wt); _mon.setUTCDate(_wt.getUTCDate() - _dow);
+    const _sun = new Date(_mon); _sun.setUTCDate(_mon.getUTCDate() + 6);
+    const weekStart = _mon.toISOString().slice(0, 10);
+    const weekEnd = _sun.toISOString().slice(0, 10);
     let whereClause = '';
     let queryParams = [];
     let filterInfo = {};
-    
+
     // Build where clause based on filter type
-    if (filterType === 'range' && startDate && endDate) {
+    if (filterType === 'week') {
+        whereClause = 'WHERE DATE(p.tanggal) BETWEEN ? AND ?';
+        queryParams.push(weekStart, weekEnd);
+        filterInfo = { type: 'range', startDate: weekStart, endDate: weekEnd };
+    } else if (filterType === 'range' && startDate && endDate) {
         whereClause = 'WHERE DATE(p.tanggal) BETWEEN ? AND ?';
         queryParams.push(startDate, endDate);
         filterInfo = { type: 'range', startDate, endDate };
