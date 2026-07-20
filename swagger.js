@@ -18,8 +18,12 @@ const options = {
     },
     servers: [
       {
+        url: '/',
+        description: 'Ikuti alamat yang sedang dibuka (disarankan - Try it out pasti jalan)'
+      },
+      {
         url: publicUrl,
-        description: 'Production (HTTPS) - fleurpresensi.online'
+        description: 'Production - fleurpresensi.online (HTTPS)'
       },
       {
         url: localUrl,
