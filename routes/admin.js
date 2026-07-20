@@ -2772,7 +2772,12 @@ router.get('/shift', requireAuth, async (req, res) => {
                    COUNT(DISTINCT e.id) AS employee_count
             FROM shift s
             LEFT JOIN jadwal_kerja ws ON ws.shift_id = s.id AND ws.deleted_at IS NULL
-            LEFT JOIN karyawan e ON e.shift_id = s.id AND e.deleted_at IS NULL
+            LEFT JOIN (
+                SELECT k.id, COALESCE(k.shift_id, kjk.shift_id) AS eff_shift
+                FROM karyawan k
+                LEFT JOIN jadwal_kerja kjk ON kjk.id = k.id_jadwal_kerja
+                WHERE k.deleted_at IS NULL
+            ) e ON e.eff_shift = s.id
             WHERE ${whereSql}
             GROUP BY s.id
             ORDER BY s.created_at DESC
