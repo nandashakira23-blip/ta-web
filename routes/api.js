@@ -2334,7 +2334,7 @@ router.get('/auth/profile/:id', authenticateToken, async (req, res) => {
  *   put:
  *     tags: [Authentication]
  *     summary: Update employee profile (self-service)
- *     description: Employee can update their own email, phone, and profile picture
+ *     description: Employee can update their own email, phone, gender, birth date, address, and profile picture
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -2354,6 +2354,16 @@ router.get('/auth/profile/:id', authenticateToken, async (req, res) => {
  *                 type: string
  *               phone:
  *                 type: string
+ *               jenis_kelamin:
+ *                 type: string
+ *                 enum: [L, P]
+ *                 description: "L = Laki-laki, P = Perempuan"
+ *               tanggal_lahir:
+ *                 type: string
+ *                 format: date
+ *               address:
+ *                 type: string
+ *                 description: Alamat karyawan
  *               profile_picture:
  *                 type: string
  *                 format: binary
@@ -3650,7 +3660,7 @@ router.get('/replacement-candidates', authenticateToken, async (req, res) => {
  *               kategori:
  *                 type: string
  *                 enum: [full_day, half_day, hourly]
- *                 default: full_day
+ *                 description: "Opsional. Bila tidak dikirim, ditentukan otomatis dari jam - ada jam_mulai & jam_selesai maka 'hourly' (izin sebagian), kosong maka 'full_day' (seharian)."
  *               tanggal_mulai:
  *                 type: string
  *                 format: date
@@ -3660,9 +3670,17 @@ router.get('/replacement-candidates', authenticateToken, async (req, res) => {
  *               jam_mulai:
  *                 type: string
  *                 nullable: true
+ *                 example: "09:00"
+ *                 description: "Isi untuk izin sebagian (per-jam); kosongkan untuk seharian."
  *               jam_selesai:
  *                 type: string
  *                 nullable: true
+ *                 example: "11:00"
+ *                 description: "Wajib bila jam_mulai diisi, dan harus lebih besar dari jam_mulai."
+ *               id_pengganti:
+ *                 type: integer
+ *                 nullable: true
+ *                 description: "ID karyawan pengganti (opsional). Bila diisi, status awal 'menunggu_pengganti' (perlu persetujuan pengganti lalu manager)."
  *               alasan:
  *                 type: string
  *               lampiran:
@@ -3673,7 +3691,7 @@ router.get('/replacement-candidates', authenticateToken, async (req, res) => {
  *       201:
  *         description: Pengajuan berhasil dibuat
  *       400:
- *         description: Data pengajuan tidak lengkap atau tidak valid
+ *         description: "Data tidak lengkap/valid. Kode - INVALID_LEAVE_TYPE, MISSING_PARTIAL_TIME (jam parsial kosong), INVALID_PARTIAL_TIME (jam selesai kurang/sama dengan jam mulai), INVALID_DATE_RANGE, REPLACEMENT_NOT_FOUND."
  *       409:
  *         description: Tanggal pengajuan tumpang tindih dengan pengajuan lain yang masih aktif
  */
@@ -6444,7 +6462,7 @@ router.get('/attendance/today', authenticateToken, async (req, res) => {
  *         description: Number of records to skip
  *     responses:
  *       200:
- *         description: Attendance history retrieved successfully
+ *         description: "Riwayat presensi. Tiap record memuat clock in/out, lokasi, effective_work_minutes, overtime_minutes, break_minutes, approved_leave_minutes, dan menggantikan (nama karyawan yang digantikan bila menjadi pengganti disetujui pada hari itu)."
  */
 router.get('/attendance/history', authenticateToken, async (req, res) => {
   const connection = await getConnection();
