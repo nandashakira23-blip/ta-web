@@ -331,8 +331,11 @@ app.get('/runtime', (req, res) => {
     });
 });
 
-// Swagger documentation
-app.use('/api-docs', serve, setup);
+// Swagger documentation (no-store: cegah Cloudflare/browser nge-cache versi lama)
+app.use('/api-docs', (req, res, next) => {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    next();
+}, serve, setup);
 
 // Root redirect
 app.get('/', (req, res) => {
