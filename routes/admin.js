@@ -3179,6 +3179,7 @@ router.get('/absensi', requireAuth, async (req, res) => {
                    lr.id,
                    lr.id_karyawan AS id_karyawan,
                    lr.jenis AS jenis,
+                   lr.leave_type AS leave_type,
                    lr.kategori AS kategori,
                    lr.tanggal_mulai AS tanggal_mulai,
                    lr.tanggal_selesai AS tanggal_selesai,
@@ -3579,6 +3580,78 @@ router.post(['/ketidakhadiran/:id/reject', '/absensi/:id/reject'], requireAuth, 
     }
 });
 
+// Manager menentukan pengganti untuk pengajuan URGENT yang sudah disetujui.
+// Business rule: hanya Manager yang boleh menentukan pengganti pada Urgent Leave, dan hanya
+// setelah pengajuan disetujui. Penggantian ini TIDAK otomatis lembur — lembur tetap dihitung
+// utils/worktime.js hanya bila jam kerja pengganti melebihi shift normal.
+router.post(['/absensi/:id/assign-pengganti', '/ketidakhadiran/:id/assign-pengganti'], requireAuth, requireManager, async (req, res) => {
+    const redirectTarget = getSafeAbsensiRedirect(req);
+    const idPengganti = Number.parseInt(req.body.id_pengganti, 10);
+    const catatan = req.body.catatan || null;
+
+    try {
+        const leaveRows = await db.query(
+            `SELECT id, id_karyawan, leave_type, status FROM absensi WHERE id = ? LIMIT 1`,
+            [req.params.id]
+        );
+        const leave = leaveRows && leaveRows[0];
+        if (!leave) {
+            req.flash('error', 'Pengajuan tidak ditemukan');
+            return res.redirect(redirectTarget);
+        }
+        if (leave.leave_type !== 'urgent') {
+            req.flash('error', 'Penentuan pengganti oleh manager hanya untuk pengajuan Urgent');
+            return res.redirect(redirectTarget);
+        }
+        if (leave.status !== 'disetujui') {
+            req.flash('error', 'Setujui pengajuan terlebih dahulu sebelum menentukan pengganti');
+            return res.redirect(redirectTarget);
+        }
+        if (!idPengganti || idPengganti === Number(leave.id_karyawan)) {
+            req.flash('error', 'Pengganti tidak valid (kosong atau sama dengan pemohon)');
+            return res.redirect(redirectTarget);
+        }
+
+        const candidate = await db.query(
+            `SELECT id FROM karyawan WHERE id = ? AND status = 'active' AND deleted_at IS NULL LIMIT 1`,
+            [idPengganti]
+        );
+        if (!candidate || candidate.length === 0) {
+            req.flash('error', 'Karyawan pengganti tidak ditemukan atau tidak aktif');
+            return res.redirect(redirectTarget);
+        }
+
+        // Upsert baris pengganti. Untuk urgent, status langsung 'disetujui' (ditetapkan manager,
+        // tidak perlu persetujuan pengganti). Integrasi absen-pengganti yang sudah ada memakai
+        // permintaan_absensi berstatus 'disetujui', jadi otomatis nyambung.
+        const existing = await db.query(
+            `SELECT id FROM permintaan_absensi WHERE id_absensi = ? LIMIT 1`,
+            [req.params.id]
+        );
+        if (existing && existing.length > 0) {
+            await db.query(
+                `UPDATE permintaan_absensi
+                 SET id_pengganti = ?, id_pemohon = ?, status = 'disetujui', catatan = COALESCE(?, catatan)
+                 WHERE id_absensi = ?`,
+                [idPengganti, leave.id_karyawan, catatan, req.params.id]
+            );
+        } else {
+            await db.query(
+                `INSERT INTO permintaan_absensi (id_absensi, id_pengganti, id_pemohon, status, catatan)
+                 VALUES (?, ?, ?, 'disetujui', ?)`,
+                [req.params.id, idPengganti, leave.id_karyawan, catatan]
+            );
+        }
+
+        req.flash('success', 'Pengganti berhasil ditentukan untuk pengajuan urgent');
+        res.redirect(redirectTarget);
+    } catch (error) {
+        console.error('Assign pengganti (urgent) error:', error);
+        req.flash('error', 'Gagal menentukan pengganti');
+        res.redirect(redirectTarget);
+    }
+});
+
 // ===== Data Pengujian Face Recognition (BAHAN LAPORAN saja) =====
 // DINAMIS: menarik data yang benar-benar ada di basis data (karyawan + foto referensi
 // wajah yang dipakai pembanding + info encoding). Tanpa migrasi/tabel baru. Filter, pilih,
@@ -3695,10 +3768,20 @@ router.get('/testing', requireAuth, requireSuperAdmin, async (req, res) => {
             console.warn('query referensi gagal:', e.message);
         }
 
+        let karyawanList = [];
+        try {
+            karyawanList = await db.query(
+                `SELECT id, nik, nama FROM karyawan WHERE deleted_at IS NULL ORDER BY nama ASC`
+            );
+        } catch (e) {
+            console.warn('query karyawan (testing) gagal:', e.message);
+        }
+
         res.render('admin/testing', {
             title: 'Data Pengujian Face Recognition - Fleur Atelier',
             events,
-            references
+            references,
+            karyawanList
         });
     } catch (err) {
         console.error('Testing query error:', err);
@@ -3708,6 +3791,35 @@ router.get('/testing', requireAuth, requireSuperAdmin, async (req, res) => {
 
 // Thumbnail wajah dari FOTO ABSEN (probe): pakai detektor wajah CNN (face-api) yang sama
 // dengan proses encoding -> ambil kotak wajah, ZOOM ke wajah + gambar KOTAK deteksi. Cache.
+// Reset presensi (alat DEMO/uji, superadmin). Menghapus baris presensi seorang karyawan pada
+// tanggal tertentu (default: hari ini WITA) supaya karyawan bisa clock-in ulang dari nol untuk
+// keperluan demo. Aturan 1-presensi/hari & laporan tetap utuh — ini hanya menghapus SATU baris
+// yang dipilih superadmin secara eksplisit, bukan mengubah logika inti.
+router.post('/testing/presensi/reset', requireAuth, requireSuperAdmin, async (req, res) => {
+    try {
+        const idKaryawan = Number.parseInt(req.body.id_karyawan, 10);
+        const tanggal = (req.body.tanggal && String(req.body.tanggal).trim()) || getCurrentDateWITA();
+        if (!idKaryawan) {
+            req.flash('error', 'Pilih karyawan yang presensinya akan direset');
+            return res.redirect('/admin/testing');
+        }
+        const result = await db.query(
+            `DELETE FROM presensi WHERE id_karyawan = ? AND tanggal = ?`,
+            [idKaryawan, tanggal]
+        );
+        if (result.affectedRows > 0) {
+            req.flash('success', `Presensi ${tanggal} untuk karyawan #${idKaryawan} direset (${result.affectedRows} baris terhapus). Karyawan bisa clock-in ulang.`);
+        } else {
+            req.flash('error', `Tidak ada presensi tanggal ${tanggal} untuk karyawan #${idKaryawan} (mungkin memang sudah kosong).`);
+        }
+        res.redirect('/admin/testing');
+    } catch (error) {
+        console.error('Reset presensi (demo) error:', error);
+        req.flash('error', 'Gagal reset presensi');
+        res.redirect('/admin/testing');
+    }
+});
+
 router.get('/testing/probe/:pid/:type', requireAuth, requireSuperAdmin, (req, res) => {
     const sharp = require('sharp');
     const pid = parseInt(req.params.pid, 10);

@@ -50,6 +50,28 @@
     <h1>Data Pengujian Face Recognition</h1>
     <p class="muted no-print">Dua tab: <strong>Riwayat</strong> (percobaan pass/fail: check-in, check-out, selesai istirahat) &amp; <strong>Referensi</strong> (wajah pembanding). Kotak <span style="color:#0a7d2c">hijau</span> = cocok, <span style="color:#b00020">merah</span> = orang lain, apa adanya = tak ada wajah. Centang untuk pilih apa yang tampil; centang baris untuk hapus/ekspor (perubahan hanya di layar).</p>
 
+    <% if (typeof messages !== 'undefined' && messages && ((messages.success && messages.success.length) || (messages.error && messages.error.length))) { %>
+        <% (messages.success || []).forEach(m => { %><div class="no-print" style="margin:8px 0;padding:8px 12px;border-radius:6px;background:#e6f4ea;color:#0a7d2c;border:1px solid #a6d8b5;font-size:13px;"><%= m %></div><% }) %>
+        <% (messages.error || []).forEach(m => { %><div class="no-print" style="margin:8px 0;padding:8px 12px;border-radius:6px;background:#fdecec;color:#b00020;border:1px solid #f3b4b4;font-size:13px;"><%= m %></div><% }) %>
+    <% } %>
+    <div class="toolbar no-print" style="border-color:#b00020;">
+        <form method="POST" action="/admin/testing/presensi/reset" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0;"
+              onsubmit="return confirm('Reset presensi karyawan terpilih pada tanggal ini? Baris presensi tsb akan dihapus agar bisa clock-in ulang (khusus DEMO).');">
+            <strong style="font-size:13px;color:#b00020;">Reset Presensi (demo)</strong>
+            <label>Karyawan:
+                <select name="id_karyawan" required>
+                    <option value="">-- pilih --</option>
+                    <% (typeof karyawanList !== 'undefined' ? karyawanList : []).forEach(k => { %>
+                        <option value="<%= k.id %>"><%= k.nik %> - <%= k.nama %></option>
+                    <% }) %>
+                </select>
+            </label>
+            <label>Tanggal: <input type="date" name="tanggal"></label>
+            <button type="submit" class="danger">Reset agar bisa clock-in ulang</button>
+        </form>
+    </div>
+    <p class="muted no-print" style="margin-top:-4px;">Kosongkan tanggal = hari ini (WITA). Hanya menghapus 1 baris presensi yang dipilih; aturan 1x/hari &amp; laporan tetap utuh.</p>
+
     <div class="tabs no-print">
         <button class="tab active" id="tabbtn-riwayat" onclick="showTab('riwayat')">Riwayat (Pass/Fail)</button>
         <button class="tab" id="tabbtn-referensi" onclick="showTab('referensi')">Referensi Wajah (<%= refs.length %>)</button>

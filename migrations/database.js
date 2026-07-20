@@ -141,6 +141,7 @@ async function up(connection) {
       id BIGINT AUTO_INCREMENT PRIMARY KEY,
       id_karyawan BIGINT NOT NULL,
       jenis ENUM('cuti', 'izin', 'sakit') NOT NULL,
+      leave_type ENUM('planned', 'urgent') NOT NULL DEFAULT 'planned',
       kategori ENUM('full_day', 'half_day', 'hourly') NOT NULL DEFAULT 'full_day',
       tanggal_mulai DATE NOT NULL,
       tanggal_selesai DATE NOT NULL,

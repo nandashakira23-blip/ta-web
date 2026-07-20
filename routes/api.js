@@ -3502,6 +3502,7 @@ router.get('/leave-requests', authenticateToken, async (req, res) => {
         lr.id,
         lr.id_karyawan AS id_karyawan,
         lr.jenis AS jenis,
+        lr.leave_type AS leave_type,
         lr.kategori AS kategori,
         lr.tanggal_mulai AS tanggal_mulai,
         lr.tanggal_selesai AS tanggal_selesai,
@@ -3657,6 +3658,10 @@ router.get('/replacement-candidates', authenticateToken, async (req, res) => {
  *               jenis:
  *                 type: string
  *                 enum: [cuti, izin, sakit]
+ *               leave_type:
+ *                 type: string
+ *                 enum: [planned, urgent]
+ *                 description: "Tipe pengajuan. 'planned' WAJIB mengisi id_pengganti (perlu ACC pengganti lalu manager). 'urgent' langsung ke manager; pengganti ditentukan manager setelah disetujui. Bila tidak dikirim, disimpulkan dari ada/tidaknya id_pengganti (backward-compatible)."
  *               kategori:
  *                 type: string
  *                 enum: [full_day, half_day, hourly]
@@ -3680,7 +3685,7 @@ router.get('/replacement-candidates', authenticateToken, async (req, res) => {
  *               id_pengganti:
  *                 type: integer
  *                 nullable: true
- *                 description: "ID karyawan pengganti (opsional). Bila diisi, status awal 'menunggu_pengganti' (perlu persetujuan pengganti lalu manager)."
+ *                 description: "ID karyawan pengganti. WAJIB untuk leave_type 'planned' (status awal 'menunggu_pengganti', perlu ACC pengganti lalu manager). DILARANG untuk 'urgent' (pengganti ditentukan manager setelah disetujui)."
  *               alasan:
  *                 type: string
  *               lampiran:
@@ -3691,7 +3696,7 @@ router.get('/replacement-candidates', authenticateToken, async (req, res) => {
  *       201:
  *         description: Pengajuan berhasil dibuat
  *       400:
- *         description: "Data tidak lengkap/valid. Kode - INVALID_LEAVE_TYPE, MISSING_PARTIAL_TIME (jam parsial kosong), INVALID_PARTIAL_TIME (jam selesai kurang/sama dengan jam mulai), INVALID_DATE_RANGE, REPLACEMENT_NOT_FOUND."
+ *         description: "Data tidak lengkap/valid. Kode - INVALID_LEAVE_TYPE, INVALID_LEAVE_REQUEST_TYPE (leave_type bukan planned/urgent), REPLACEMENT_REQUIRED_FOR_PLANNED (planned tanpa pengganti), SUBSTITUTE_NOT_ALLOWED_FOR_URGENT (urgent pilih pengganti sendiri), MISSING_PARTIAL_TIME, INVALID_PARTIAL_TIME, INVALID_DATE_RANGE, REPLACEMENT_NOT_FOUND."
  *       409:
  *         description: Tanggal pengajuan tumpang tindih dengan pengajuan lain yang masih aktif
  */
@@ -3701,6 +3706,7 @@ router.post('/leave-requests', authenticateToken, leaveUpload.single('lampiran')
   try {
     const {
       jenis,
+      leave_type,
       kategori,
       tanggal_mulai,
       tanggal_selesai,
@@ -3787,7 +3793,43 @@ router.post('/leave-requests', authenticateToken, leaveUpload.single('lampiran')
       }
     }
 
-    const initialStatus = replacementId ? 'menunggu_pengganti' : 'menunggu_manager';
+    // Tipe pengajuan: 'planned' (pengganti dipilih pengaju -> perlu ACC pengganti dulu, baru manager)
+    // atau 'urgent' (langsung ke manager; pengganti ditentukan manager setelah disetujui).
+    // Backward-compatible: bila leave_type tidak dikirim (klien lama), disimpulkan dari ada/tidaknya
+    // pengganti sehingga perilaku lama tidak berubah.
+    const rawLeaveType = (leave_type || '').toString().toLowerCase().trim();
+    let normalizedLeaveType;
+    if (rawLeaveType) {
+      if (!['planned', 'urgent'].includes(rawLeaveType)) {
+        await discardUploadedFile(req.file);
+        return res.status(400).json({
+          success: false,
+          message: 'Tipe pengajuan harus planned atau urgent',
+          code: 'INVALID_LEAVE_REQUEST_TYPE'
+        });
+      }
+      normalizedLeaveType = rawLeaveType;
+      if (normalizedLeaveType === 'planned' && !replacementId) {
+        await discardUploadedFile(req.file);
+        return res.status(400).json({
+          success: false,
+          message: 'Planned leave wajib memilih karyawan pengganti',
+          code: 'REPLACEMENT_REQUIRED_FOR_PLANNED'
+        });
+      }
+      if (normalizedLeaveType === 'urgent' && replacementId) {
+        await discardUploadedFile(req.file);
+        return res.status(400).json({
+          success: false,
+          message: 'Urgent leave tidak boleh memilih pengganti sendiri; pengganti ditentukan Manager',
+          code: 'SUBSTITUTE_NOT_ALLOWED_FOR_URGENT'
+        });
+      }
+    } else {
+      normalizedLeaveType = replacementId ? 'planned' : 'urgent';
+    }
+
+    const initialStatus = normalizedLeaveType === 'planned' ? 'menunggu_pengganti' : 'menunggu_manager';
     let lampiranPath = null;
     let durationMinutes = 0;
     if (normalizedCategory === 'hourly' || normalizedCategory === 'half_day') {
@@ -3832,12 +3874,13 @@ router.post('/leave-requests', authenticateToken, leaveUpload.single('lampiran')
 
     const [result] = await connection.execute(`
       INSERT INTO absensi (
-        id_karyawan, jenis, kategori, tanggal_mulai, tanggal_selesai,
+        id_karyawan, jenis, leave_type, kategori, tanggal_mulai, tanggal_selesai,
         jam_mulai, jam_selesai, durasi_menit, alasan, lampiran, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       req.user.id,
       normalizedJenis,
+      normalizedLeaveType,
       normalizedCategory,
       tanggal_mulai,
       tanggal_selesai,
@@ -3864,6 +3907,7 @@ router.post('/leave-requests', authenticateToken, leaveUpload.single('lampiran')
         : 'Pengajuan Absensi berhasil dikirim dan menunggu persetujuan manager',
       data: {
         id: result.insertId,
+        leave_type: normalizedLeaveType,
         status: initialStatus,
         durasi_menit: durationMinutes
       }
@@ -4007,6 +4051,7 @@ router.get('/replacement-requests', authenticateToken, async (req, res) => {
         pengaju.nama AS nama_karyawan,
         pengaju.nik,
         lr.jenis,
+        lr.leave_type,
         lr.kategori,
         lr.tanggal_mulai,
         lr.tanggal_selesai,
@@ -4035,6 +4080,57 @@ router.get('/replacement-requests', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error('Replacement request list error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      code: 'SERVER_ERROR'
+    });
+  } finally {
+    await connection.end();
+  }
+});
+
+/**
+ * @swagger
+ * /api/replacement-requests/pending-count:
+ *   get:
+ *     tags: [Absensi]
+ *     summary: Jumlah permintaan pengganti yang masih menunggu keputusan user login
+ *     description: Dipakai untuk badge/notifikasi di beranda (mis. app Android) menuju halaman cek approval pengganti.
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Jumlah permintaan pengganti menunggu
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     pending: { type: integer, example: 2 }
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
+router.get('/replacement-requests/pending-count', authenticateToken, async (req, res) => {
+  const connection = await getConnection();
+  try {
+    const [rows] = await connection.execute(
+      `SELECT COUNT(*) AS pending
+       FROM permintaan_absensi
+       WHERE id_pengganti = ? AND status = 'menunggu'`,
+      [req.user.id]
+    );
+    res.json({
+      success: true,
+      message: 'Pending replacement count retrieved successfully',
+      data: { pending: Number(rows[0]?.pending || 0) }
+    });
+  } catch (error) {
+    console.error('Pending replacement count error:', error);
     res.status(500).json({
       success: false,
       message: 'Internal server error',
