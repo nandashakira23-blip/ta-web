@@ -3543,7 +3543,33 @@ router.post(['/ketidakhadiran/:id/approve', '/absensi/:id/approve'], requireAuth
             console.error('Gagal recompute presensi setelah approve izin:', recalcErr.message);
         }
 
-        req.flash('success', 'Pengajuan berhasil disetujui');
+        // Untuk pengajuan URGENT: bila manager sekalian memilih pengganti saat approve, tetapkan
+        // sekarang juga (planned tidak perlu — pengganti sudah dipilih pengaju). Penggantian ini
+        // tidak otomatis lembur; lembur tetap dihitung worktime.js bila jam kerja lewat shift.
+        let penggantiMsg = '';
+        const idPengganti = Number.parseInt(req.body.id_pengganti, 10);
+        if (idPengganti) {
+            try {
+                const leaveRows = await db.query('SELECT id_karyawan, leave_type FROM absensi WHERE id = ? LIMIT 1', [req.params.id]);
+                const leave = leaveRows && leaveRows[0];
+                if (leave && leave.leave_type === 'urgent' && idPengganti !== Number(leave.id_karyawan)) {
+                    const cand = await db.query(`SELECT id FROM karyawan WHERE id = ? AND status = 'active' AND deleted_at IS NULL LIMIT 1`, [idPengganti]);
+                    if (cand && cand.length > 0) {
+                        const existing = await db.query('SELECT id FROM permintaan_absensi WHERE id_absensi = ? LIMIT 1', [req.params.id]);
+                        if (existing && existing.length > 0) {
+                            await db.query(`UPDATE permintaan_absensi SET id_pengganti = ?, id_pemohon = ?, status = 'disetujui' WHERE id_absensi = ?`, [idPengganti, leave.id_karyawan, req.params.id]);
+                        } else {
+                            await db.query(`INSERT INTO permintaan_absensi (id_absensi, id_pengganti, id_pemohon, status) VALUES (?, ?, ?, 'disetujui')`, [req.params.id, idPengganti, leave.id_karyawan]);
+                        }
+                        penggantiMsg = ' & pengganti ditetapkan';
+                    }
+                }
+            } catch (assignErr) {
+                console.error('Gagal menetapkan pengganti saat approve urgent:', assignErr.message);
+            }
+        }
+
+        req.flash('success', `Pengajuan berhasil disetujui${penggantiMsg}`);
         res.redirect(redirectTarget);
     } catch (error) {
         console.error('Approve absensi error:', error);

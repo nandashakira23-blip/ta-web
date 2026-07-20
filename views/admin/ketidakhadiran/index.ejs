@@ -246,6 +246,20 @@
                                                 <textarea name="approval_notes" rows="2" placeholder="Catatan persetujuan" class="approval-field w-full rounded border border-brown-700/40 bg-dark-700 px-3 py-2 text-sm text-white"></textarea>
                                                 <textarea name="rejection_reason" rows="2" placeholder="Alasan penolakan" class="rejection-field hidden w-full rounded border border-brown-700/40 bg-dark-700 px-3 py-2 text-sm text-white"></textarea>
 
+                                                <% if (String(item.leave_type) === 'urgent') { %>
+                                                    <div class="pengganti-approve space-y-1 rounded border border-orange-700/40 bg-dark-700 px-3 py-2">
+                                                        <div class="text-xs font-semibold text-orange-200">Tunjuk pengganti (mendadak) — opsional, bisa juga ditetapkan nanti</div>
+                                                        <select name="id_pengganti" class="w-full rounded border border-brown-700/40 bg-dark-800 px-2 py-1 text-sm text-white">
+                                                            <option value="">-- pilih pengganti --</option>
+                                                            <% employeeList.forEach(k => { %>
+                                                                <% if (Number(k.id) !== Number(item.id_karyawan)) { %>
+                                                                    <option value="<%= k.id %>"><%= k.nama %> (<%= k.nik %>)<% if (k.nama_shift) { %> — <%= k.nama_shift %><% if (k.shift_masuk) { %> <%= k.shift_masuk %>-<%= k.shift_keluar %><% } %><% } else if (k.jadwal_kerja) { %> — <%= k.jadwal_kerja %><% } %></option>
+                                                                <% } %>
+                                                            <% }) %>
+                                                        </select>
+                                                    </div>
+                                                <% } %>
+
                                                 <button type="submit" class="approval-submit rounded bg-green-700 px-3 py-2 text-sm text-white">Setujui</button>
                                             </form>
                                         <% } %>
@@ -290,6 +304,7 @@
             const approvalField = form.querySelector('.approval-field');
             const rejectionField = form.querySelector('.rejection-field');
             const submitBtn = form.querySelector('.approval-submit');
+            const penggantiField = form.querySelector('.pengganti-approve');
 
             const syncState = () => {
                 const isReject = rejectRadio.checked;
@@ -299,6 +314,10 @@
 
                 approvalField.classList.toggle('hidden', isReject);
                 rejectionField.classList.toggle('hidden', !isReject);
+                if (penggantiField) {
+                    penggantiField.classList.toggle('hidden', isReject);
+                    if (isReject) { const sel = penggantiField.querySelector('select'); if (sel) sel.value = ''; }
+                }
 
                 if (isReject) {
                     approvalField.value = '';
