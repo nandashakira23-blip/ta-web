@@ -256,7 +256,7 @@
                                                     <option value="">-- pilih pengganti --</option>
                                                     <% employeeList.forEach(k => { %>
                                                         <% if (Number(k.id) !== Number(item.id_karyawan)) { %>
-                                                            <option value="<%= k.id %>" <%= Number(item.id_pengganti) === Number(k.id) ? 'selected' : '' %>><%= k.nama %> (<%= k.nik %>)</option>
+                                                            <option value="<%= k.id %>" <%= Number(item.id_pengganti) === Number(k.id) ? 'selected' : '' %>><%= k.nama %> (<%= k.nik %>)<% if (k.nama_shift) { %> — <%= k.nama_shift %><% if (k.shift_masuk) { %> <%= k.shift_masuk %>-<%= k.shift_keluar %><% } %><% } else if (k.jadwal_kerja) { %> — <%= k.jadwal_kerja %><% } %></option>
                                                         <% } %>
                                                     <% }) %>
                                                 </select>

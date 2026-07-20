@@ -3240,6 +3240,8 @@ router.get('/absensi', requireAuth, async (req, res) => {
                 j.nama_jabatan,
                 jk.nama AS jadwal_kerja,
                 s.nama_shift,
+                TIME_FORMAT(s.jam_masuk, '%H:%i') AS shift_masuk,
+                TIME_FORMAT(s.jam_keluar, '%H:%i') AS shift_keluar,
                 COALESCE(ps.total_presensi, 0) AS total_presensi,
                 COALESCE(ps.presensi_hari_ini, 0) AS presensi_hari_ini,
                 COALESCE(ps.total_terlambat, 0) AS total_terlambat,
@@ -3248,7 +3250,7 @@ router.get('/absensi', requireAuth, async (req, res) => {
             FROM karyawan e
             LEFT JOIN jabatan j ON j.id = e.id_jabatan
             LEFT JOIN jadwal_kerja jk ON jk.id = e.id_jadwal_kerja
-            LEFT JOIN shift s ON s.id = e.shift_id
+            LEFT JOIN shift s ON s.id = COALESCE(e.shift_id, jk.shift_id)
             LEFT JOIN (
                 SELECT
                     id_karyawan,
