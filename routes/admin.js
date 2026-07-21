@@ -3451,6 +3451,7 @@ router.get('/absensi/karyawan/:id', requireAuth, async (req, res) => {
                 lr.id,
                 lr.id_karyawan,
                 lr.jenis,
+                lr.leave_type,
                 lr.kategori,
                 lr.tanggal_mulai,
                 lr.tanggal_selesai,
@@ -3485,6 +3486,19 @@ router.get('/absensi/karyawan/:id', requireAuth, async (req, res) => {
             LIMIT ${safeLimitA} OFFSET ${safeOffsetA}
         `, [employeeId, employeeId, employeeId, ...filterParams]);
 
+        // Daftar karyawan aktif (+ shift efektif) untuk pilih pengganti pada approve urgent
+        const employeeList = await db.query(`
+            SELECT e.id, e.nik, e.nama, s.nama_shift,
+                   TIME_FORMAT(s.jam_masuk, '%H:%i') AS shift_masuk,
+                   TIME_FORMAT(s.jam_keluar, '%H:%i') AS shift_keluar,
+                   jk.nama AS jadwal_kerja
+            FROM karyawan e
+            LEFT JOIN jadwal_kerja jk ON jk.id = e.id_jadwal_kerja
+            LEFT JOIN shift s ON s.id = COALESCE(e.shift_id, jk.shift_id)
+            WHERE e.status = 'active' AND e.deleted_at IS NULL
+            ORDER BY e.nama ASC
+        `);
+
         res.render('admin/absensi/karyawan-detail', {
             title: `Detail Absensi ${employeeRows[0].nama} - Fleur Atelier`,
             admin: req.session.admin,
@@ -3492,6 +3506,7 @@ router.get('/absensi/karyawan/:id', requireAuth, async (req, res) => {
             employee: employeeRows[0],
             absensiSummary: absensiSummaryRows[0] || {},
             absensiRows,
+            employeeList,
             filters: { filterType: ft, tanggal, startDate, endDate, month, year },
             pagination: paginationA,
             messages: {

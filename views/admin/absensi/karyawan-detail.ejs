@@ -252,6 +252,11 @@
                                         <td class="px-4 py-3">
                                             <div class="font-medium text-white capitalize"><%= typeLabel(row.jenis) %></div>
                                             <div class="text-xs text-brown-300"><%= categoryLabel(row.kategori) %></div>
+                                            <% if (String(row.leave_type) === 'urgent') { %>
+                                                <span class="mt-1 inline-block rounded-full bg-orange-900/60 px-2 py-0.5 text-[10px] font-semibold text-orange-200">URGENT</span>
+                                            <% } else { %>
+                                                <span class="mt-1 inline-block rounded-full bg-blue-900/50 px-2 py-0.5 text-[10px] font-semibold text-blue-200">PLANNED</span>
+                                            <% } %>
                                         </td>
                                         <td class="px-4 py-3">
                                             <div class="text-sm"><%= formatDateID(row.tanggal_mulai) %> s/d <%= formatDateID(row.tanggal_selesai) %></div>
@@ -292,7 +297,9 @@
                                                             data-id="<%= row.id %>"
                                                             data-karyawan="<%= row.nama_karyawan || employee.nama %>"
                                                             data-jenis="<%= typeLabel(row.jenis) %> / <%= categoryLabel(row.kategori) %>"
-                                                            data-periode="<%= formatDateID(row.tanggal_mulai) %> s/d <%= formatDateID(row.tanggal_selesai) %>">
+                                                            data-periode="<%= formatDateID(row.tanggal_mulai) %> s/d <%= formatDateID(row.tanggal_selesai) %>"
+                                                            data-leavetype="<%= row.leave_type %>"
+                                                            data-pengaju="<%= row.id_karyawan %>">
                                                         <i class="fas fa-check"></i>Setujui
                                                     </button>
                                                     <button type="button"
@@ -345,6 +352,17 @@
                         <textarea name="approval_notes" rows="3"
                                   class="w-full rounded-lg border border-brown-700/40 bg-dark-700 px-3 py-2 text-white placeholder-brown-400 focus:ring-2 focus:ring-green-500"
                                   placeholder="Contoh: Disetujui sesuai prosedur, atau alasan lain..."></textarea>
+                    </div>
+                    <div id="approvePenggantiSection" class="hidden">
+                        <label class="block text-sm font-medium text-orange-300 mb-1">Tunjuk pengganti (mendadak) — opsional</label>
+                        <select name="id_pengganti" id="approvePengganti"
+                                class="w-full rounded-lg border border-brown-700/40 bg-dark-700 px-3 py-2 text-white focus:ring-2 focus:ring-orange-500">
+                            <option value="">-- pilih pengganti --</option>
+                            <% employeeList.forEach(k => { %>
+                                <option value="<%= k.id %>" data-empid="<%= k.id %>"><%= k.nama %> (<%= k.nik %>)<% if (k.nama_shift) { %> — <%= k.nama_shift %><% if (k.shift_masuk) { %> <%= k.shift_masuk %>-<%= k.shift_keluar %><% } %><% } else if (k.jadwal_kerja) { %> — <%= k.jadwal_kerja %><% } %></option>
+                            <% }) %>
+                        </select>
+                        <p class="text-xs text-brown-400 mt-1">Hanya untuk pengajuan Mendadak. Bisa juga ditetapkan belakangan.</p>
                     </div>
                 </div>
                 <div class="flex justify-end gap-2 border-t border-brown-600/30 px-5 py-3">
@@ -414,6 +432,19 @@
                     document.getElementById('approveKaryawan').textContent = btn.dataset.karyawan;
                     document.getElementById('approveJenis').textContent = btn.dataset.jenis;
                     document.getElementById('approvePeriode').textContent = btn.dataset.periode;
+
+                    // Khusus urgent: tampilkan pilih pengganti (+ sembunyikan opsi pengaju sendiri).
+                    const isUrgent = btn.dataset.leavetype === 'urgent';
+                    const section = document.getElementById('approvePenggantiSection');
+                    const select = document.getElementById('approvePengganti');
+                    section.classList.toggle('hidden', !isUrgent);
+                    if (select) {
+                        select.value = '';
+                        select.disabled = !isUrgent; // planned: tidak dikirim
+                        Array.from(select.options).forEach(opt => {
+                            opt.hidden = opt.value ? (opt.dataset.empid === btn.dataset.pengaju) : false;
+                        });
+                    }
                     openModal(approveModal);
                 });
             });
