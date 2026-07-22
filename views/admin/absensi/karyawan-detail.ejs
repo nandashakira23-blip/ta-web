@@ -299,7 +299,9 @@
                                                             data-jenis="<%= typeLabel(row.jenis) %> / <%= categoryLabel(row.kategori) %>"
                                                             data-periode="<%= formatDateID(row.tanggal_mulai) %> s/d <%= formatDateID(row.tanggal_selesai) %>"
                                                             data-leavetype="<%= row.leave_type %>"
-                                                            data-pengaju="<%= row.id_karyawan %>">
+                                                            data-pengaju="<%= row.id_karyawan %>"
+                                                            data-jammulai="<%= row.jam_mulai ? String(row.jam_mulai).substring(0,5) : '' %>"
+                                                            data-jamselesai="<%= row.jam_selesai ? String(row.jam_selesai).substring(0,5) : '' %>">
                                                         <i class="fas fa-check"></i>Setujui
                                                     </button>
                                                     <button type="button"
@@ -362,7 +364,12 @@
                                 <option value="<%= k.id %>" data-empid="<%= k.id %>"><%= k.nama %> (<%= k.nik %>)<% if (k.nama_shift) { %> — <%= k.nama_shift %><% if (k.shift_masuk) { %> <%= k.shift_masuk %>-<%= k.shift_keluar %><% } %><% } else if (k.jadwal_kerja) { %> — <%= k.jadwal_kerja %><% } %></option>
                             <% }) %>
                         </select>
-                        <p class="text-xs text-brown-400 mt-1">Hanya untuk pengajuan Mendadak. Bisa juga ditetapkan belakangan.</p>
+                        <div class="flex items-center gap-2 mt-2">
+                            <input type="time" name="jam_mulai" id="approveJamMulai" class="w-full rounded-lg border border-brown-700/40 bg-dark-700 px-3 py-2 text-white focus:ring-2 focus:ring-orange-500">
+                            <span class="text-sm text-brown-300">s/d</span>
+                            <input type="time" name="jam_selesai" id="approveJamSelesai" class="w-full rounded-lg border border-brown-700/40 bg-dark-700 px-3 py-2 text-white focus:ring-2 focus:ring-orange-500">
+                        </div>
+                        <p class="text-xs text-brown-400 mt-1">Pengganti &amp; jam (dari–sampai) khusus pengajuan Mendadak; jam terisi dari pemohon, bisa disesuaikan.</p>
                     </div>
                 </div>
                 <div class="flex justify-end gap-2 border-t border-brown-600/30 px-5 py-3">
@@ -444,6 +451,15 @@
                         Array.from(select.options).forEach(opt => {
                             opt.hidden = opt.value ? (opt.dataset.empid === btn.dataset.pengaju) : false;
                         });
+                    }
+                    // Jam pengganti: prefill dari jam pemohon, hanya aktif (dikirim) untuk urgent
+                    const jm = document.getElementById('approveJamMulai');
+                    const js = document.getElementById('approveJamSelesai');
+                    if (jm && js) {
+                        jm.value = btn.dataset.jammulai || '';
+                        js.value = btn.dataset.jamselesai || '';
+                        jm.disabled = !isUrgent;
+                        js.disabled = !isUrgent;
                     }
                     openModal(approveModal);
                 });

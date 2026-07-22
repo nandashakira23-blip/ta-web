@@ -62,6 +62,14 @@ function getCurrentDateWITA() {
     return `${year}-${month}-${day}`;
 }
 
+// Selisih menit antara dua jam "HH:MM" (durasi izin sebagian)
+function menitAntaraJam(a, b) {
+    const parse = (s) => { const m = /^(\d{1,2}):(\d{2})/.exec(String(s || '').trim()); return m ? (Number(m[1]) * 60 + Number(m[2])) : NaN; };
+    const x = parse(a), y = parse(b);
+    if (Number.isNaN(x) || Number.isNaN(y)) return 0;
+    return Math.max(0, y - x);
+}
+
 function getDateWITA(daysOffset = 0) {
     const now = new Date();
     const witaTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Makassar' }));
@@ -3550,24 +3558,30 @@ router.post(['/ketidakhadiran/:id/approve', '/absensi/:id/approve'], requireAuth
             return res.redirect(redirectTarget);
         }
 
-        // Izin bisa disetujui SETELAH karyawan clock-out; hitung ulang presensi terkait
-        // agar izin ikut masuk ke jam kerja efektif yang tersimpan.
+        // Untuk pengajuan URGENT saat approve: manager boleh (1) menyesuaikan JAM (dari-sampai)
+        // dan (2) menetapkan pengganti. Dilakukan SEBELUM recompute agar jam terbaru ikut terhitung.
+        // Planned tidak terpengaruh (pengganti & jam sudah dari pengaju).
+        let extraMsg = '';
         try {
-            await recalcPresensiForLeave(dbOriginal, req.params.id);
-        } catch (recalcErr) {
-            console.error('Gagal recompute presensi setelah approve izin:', recalcErr.message);
-        }
-
-        // Untuk pengajuan URGENT: bila manager sekalian memilih pengganti saat approve, tetapkan
-        // sekarang juga (planned tidak perlu — pengganti sudah dipilih pengaju). Penggantian ini
-        // tidak otomatis lembur; lembur tetap dihitung worktime.js bila jam kerja lewat shift.
-        let penggantiMsg = '';
-        const idPengganti = Number.parseInt(req.body.id_pengganti, 10);
-        if (idPengganti) {
-            try {
-                const leaveRows = await db.query('SELECT id_karyawan, leave_type FROM absensi WHERE id = ? LIMIT 1', [req.params.id]);
-                const leave = leaveRows && leaveRows[0];
-                if (leave && leave.leave_type === 'urgent' && idPengganti !== Number(leave.id_karyawan)) {
+            const leaveRows = await db.query('SELECT id_karyawan, leave_type FROM absensi WHERE id = ? LIMIT 1', [req.params.id]);
+            const leave = leaveRows && leaveRows[0];
+            if (leave && leave.leave_type === 'urgent') {
+                const jamMulai = (req.body.jam_mulai || '').toString().trim();
+                const jamSelesai = (req.body.jam_selesai || '').toString().trim();
+                if (jamMulai && jamSelesai) {
+                    const durasi = menitAntaraJam(jamMulai, jamSelesai);
+                    if (durasi > 0) {
+                        await db.query(
+                            `UPDATE absensi SET jam_mulai = ?, jam_selesai = ?, durasi_menit = ?,
+                                 kategori = CASE WHEN kategori = 'full_day' THEN 'hourly' ELSE kategori END
+                             WHERE id = ?`,
+                            [jamMulai, jamSelesai, durasi, req.params.id]
+                        );
+                        extraMsg += ' & jam disesuaikan';
+                    }
+                }
+                const idPengganti = Number.parseInt(req.body.id_pengganti, 10);
+                if (idPengganti && idPengganti !== Number(leave.id_karyawan)) {
                     const cand = await db.query(`SELECT id FROM karyawan WHERE id = ? AND status = 'active' AND deleted_at IS NULL LIMIT 1`, [idPengganti]);
                     if (cand && cand.length > 0) {
                         const existing = await db.query('SELECT id FROM permintaan_absensi WHERE id_absensi = ? LIMIT 1', [req.params.id]);
@@ -3576,15 +3590,22 @@ router.post(['/ketidakhadiran/:id/approve', '/absensi/:id/approve'], requireAuth
                         } else {
                             await db.query(`INSERT INTO permintaan_absensi (id_absensi, id_pengganti, id_pemohon, status) VALUES (?, ?, ?, 'disetujui')`, [req.params.id, idPengganti, leave.id_karyawan]);
                         }
-                        penggantiMsg = ' & pengganti ditetapkan';
+                        extraMsg += ' & pengganti ditetapkan';
                     }
                 }
-            } catch (assignErr) {
-                console.error('Gagal menetapkan pengganti saat approve urgent:', assignErr.message);
             }
+        } catch (e) {
+            console.error('Approve urgent extras error:', e.message);
         }
 
-        req.flash('success', `Pengajuan berhasil disetujui${penggantiMsg}`);
+        // Izin bisa disetujui SETELAH karyawan clock-out; hitung ulang presensi terkait.
+        try {
+            await recalcPresensiForLeave(dbOriginal, req.params.id);
+        } catch (recalcErr) {
+            console.error('Gagal recompute presensi setelah approve izin:', recalcErr.message);
+        }
+
+        req.flash('success', `Pengajuan berhasil disetujui${extraMsg}`);
         res.redirect(redirectTarget);
     } catch (error) {
         console.error('Approve absensi error:', error);

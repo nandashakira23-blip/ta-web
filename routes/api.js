@@ -4121,10 +4121,20 @@ router.get('/replacement-requests', authenticateToken, async (req, res) => {
 router.get('/replacement-requests/pending-count', authenticateToken, async (req, res) => {
   const connection = await getConnection();
   try {
+    // Hitung tugas pengganti yang perlu perhatian di beranda:
+    //  - planned yang masih menunggu keputusan user (perlu ACC/tolak), DAN
+    //  - urgent yang sudah DISETUJUI manager & user ditunjuk sebagai pengganti (info: wajib hadir),
+    //    selama tanggalnya belum lewat.
     const [rows] = await connection.execute(
       `SELECT COUNT(*) AS pending
-       FROM permintaan_absensi
-       WHERE id_pengganti = ? AND status = 'menunggu'`,
+       FROM permintaan_absensi pa
+       JOIN absensi a ON a.id = pa.id_absensi
+       WHERE pa.id_pengganti = ?
+         AND (
+           pa.status = 'menunggu'
+           OR (pa.status = 'disetujui' AND a.leave_type = 'urgent'
+               AND a.status = 'disetujui' AND a.tanggal_selesai >= CURDATE())
+         )`,
       [req.user.id]
     );
     res.json({
