@@ -6003,12 +6003,41 @@ router.post('/attendance/checkout', authenticateToken, upload.array('photo', 5),
     finalBreakData.durasi_istirahat_menit = breakAllowanceMinutes;
     finalBreakData.dihitung_menit = countedBreakMinutes;
 
+    // Cek apakah karyawan ini hari ini bertugas sebagai PENGGANTI (disetujui). Bila ya, ambil
+    // window cover (jam yang ditetapkan manager; fallback shift orang yang digantikan) supaya
+    // jam menutupi yang berada DI LUAR shift sendiri dihitung sebagai lembur (menggantikan).
+    let coverageWindow = null;
+    try {
+      const [covRows] = await connection.execute(
+        `SELECT TIME(COALESCE(a.jam_mulai, sc.jam_masuk)) AS cov_start,
+                TIME(COALESCE(a.jam_selesai, sc.jam_keluar)) AS cov_end
+           FROM permintaan_absensi pa
+           JOIN absensi a ON a.id = pa.id_absensi
+           LEFT JOIN karyawan kc ON kc.id = a.id_karyawan
+           LEFT JOIN jadwal_kerja jkc ON jkc.id = kc.id_jadwal_kerja
+           LEFT JOIN shift sc ON sc.id = COALESCE(kc.shift_id, jkc.shift_id)
+          WHERE pa.id_pengganti = ?
+            AND pa.status = 'disetujui'
+            AND a.status IN ('approved','disetujui')
+            AND ? BETWEEN a.tanggal_mulai AND a.tanggal_selesai
+          ORDER BY (a.jam_mulai IS NULL), a.id DESC
+          LIMIT 1`,
+        [req.user.id, today]
+      );
+      if (covRows.length && covRows[0].cov_start && covRows[0].cov_end) {
+        coverageWindow = { start: covRows[0].cov_start, end: covRows[0].cov_end };
+      }
+    } catch (covErr) {
+      console.error('Gagal ambil window pengganti (lembur cover):', covErr.message);
+    }
+
     const summary = calculateWorkSummary({
       schedule,
       checkInTime: String(checkInRow.jam_masuk),
       checkOutTime: currentTime,
       leaveMinutes: approvedLeaveMinutes,
-      breakMinutes: countedBreakMinutes
+      breakMinutes: countedBreakMinutes,
+      coverageWindow
     });
     const storedPhotoPath = await persistUploadedFile(req.file, { folder: 'uploads/karyawan' });
     const dataKeluar = buildPresensiEventData({

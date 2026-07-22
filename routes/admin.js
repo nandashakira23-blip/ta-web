@@ -14,7 +14,7 @@ const {
     listBlobFilesByPrefixes,
     persistUploadedFile
 } = require('../utils/upload-storage');
-const { recalcPresensiForLeave } = require('../utils/presensi-recalc');
+const { recalcPresensiForLeave, recalcSubstitutePresensiForLeave } = require('../utils/presensi-recalc');
 
 // Wrapper to make db.query work with both callbacks and promises
 const db = {
@@ -3612,6 +3612,12 @@ router.post(['/ketidakhadiran/:id/approve', '/absensi/:id/approve'], requireAuth
         } catch (recalcErr) {
             console.error('Gagal recompute presensi setelah approve izin:', recalcErr.message);
         }
+        // Kreditkan lembur "menggantikan" ke pengganti bila ia sudah terlanjur clock-out.
+        try {
+            await recalcSubstitutePresensiForLeave(dbOriginal, req.params.id);
+        } catch (subErr) {
+            console.error('Gagal recompute presensi pengganti setelah approve:', subErr.message);
+        }
 
         req.flash('success', `Pengajuan berhasil disetujui${extraMsg}`);
         res.redirect(redirectTarget);
@@ -3654,8 +3660,10 @@ router.post(['/ketidakhadiran/:id/reject', '/absensi/:id/reject'], requireAuth, 
 
 // Manager menentukan pengganti untuk pengajuan URGENT yang sudah disetujui.
 // Business rule: hanya Manager yang boleh menentukan pengganti pada Urgent Leave, dan hanya
-// setelah pengajuan disetujui. Penggantian ini TIDAK otomatis lembur — lembur tetap dihitung
-// utils/worktime.js hanya bila jam kerja pengganti melebihi shift normal.
+// setelah pengajuan disetujui. Lembur pengganti dihitung utils/worktime.js: jam menutupi
+// (window cover, dari jam yang ditetapkan manager / shift orang yang digantikan) yang berada
+// DI LUAR shift pengganti sendiri diakui sebagai lembur (>= 1 jam); bagian yang beririsan
+// dengan shift sendiri tetap jam kerja biasa (tidak dobel).
 router.post(['/absensi/:id/assign-pengganti', '/ketidakhadiran/:id/assign-pengganti'], requireAuth, requireManager, async (req, res) => {
     const redirectTarget = getSafeAbsensiRedirect(req);
     const idPengganti = Number.parseInt(req.body.id_pengganti, 10);
@@ -3728,6 +3736,13 @@ router.post(['/absensi/:id/assign-pengganti', '/ketidakhadiran/:id/assign-pengga
                  VALUES (?, ?, ?, 'disetujui', ?)`,
                 [req.params.id, idPengganti, leave.id_karyawan, catatan]
             );
+        }
+
+        // Bila pengganti sudah terlanjur clock-out, kreditkan lembur "menggantikan" sekarang.
+        try {
+            await recalcSubstitutePresensiForLeave(dbOriginal, req.params.id);
+        } catch (subErr) {
+            console.error('Gagal recompute presensi pengganti setelah assign:', subErr.message);
         }
 
         req.flash('success', 'Pengganti berhasil ditentukan untuk pengajuan urgent');
