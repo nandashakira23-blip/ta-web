@@ -261,15 +261,23 @@
                                         </td>
                                     </tr>
                                     <% if (r.menggantikan) { %>
-                                        <tr id="mg-<%= r.id %>" class="mg-detail hidden bg-purple-900/15">
-                                            <td colspan="7" class="px-6 py-3 text-sm text-purple-100">
-                                                <div class="flex flex-wrap items-center gap-x-6 gap-y-1">
-                                                    <span><span class="text-purple-300">Menggantikan:</span> <b class="text-white"><%= r.menggantikan %></b><% if (r.mg_nik) { %> <span class="text-brown-400">(<%= r.mg_nik %>)</span><% } %></span>
-                                                    <span><span class="text-purple-300">Tipe:</span> <%= String(r.mg_tipe) === 'urgent' ? 'Mendadak (urgent)' : 'Terencana (planned)' %></span>
-                                                    <span><span class="text-purple-300">Izin dicover:</span> <%= (r.mg_jam_mulai && r.mg_jam_selesai) ? (String(r.mg_jam_mulai).substring(0,5) + ' – ' + String(r.mg_jam_selesai).substring(0,5)) : 'Seharian' %></span>
-                                                    <span><span class="text-purple-300">Jam kerja pengganti:</span> <b class="text-white"><%= r.jam_keluar ? fmtMin(r.effective_work_minutes) : 'belum clock-out' %></b><% if (Number(r.overtime_minutes) > 0) { %> <span class="text-blue-300">(+lembur <%= fmtMin(r.overtime_minutes) %>)</span><% } %></span>
+                                        <tr id="mg-<%= r.id %>" class="mg-detail hidden">
+                                            <td colspan="7" class="px-6 py-4" style="background:linear-gradient(90deg,rgba(147,51,234,.12),rgba(147,51,234,.02));border-left:3px solid rgba(168,85,247,.6)">
+                                                <div class="mb-2 flex items-center gap-2" style="font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:#c4b5fd"><i class="fas fa-user-friends"></i>Detail Penggantian</div>
+                                                <div class="flex flex-wrap items-center gap-2">
+                                                    <span style="display:inline-flex;align-items:center;gap:6px;border-radius:9999px;padding:5px 12px;font-size:12px;font-weight:600;background:rgba(168,85,247,.18);color:#e9d5ff;border:1px solid rgba(168,85,247,.45)"><i class="fas fa-user" style="font-size:10px;opacity:.85"></i>Menggantikan <b><%= r.menggantikan %></b><% if (r.mg_nik) { %> <span style="opacity:.65;font-weight:400">·<%= r.mg_nik %></span><% } %></span>
+                                                    <% if (String(r.mg_tipe) === 'urgent') { %>
+                                                        <span style="display:inline-flex;align-items:center;gap:6px;border-radius:9999px;padding:5px 12px;font-size:11px;font-weight:700;background:rgba(249,115,22,.18);color:#fdba74;border:1px solid rgba(249,115,22,.45)"><i class="fas fa-bolt" style="font-size:10px"></i>MENDADAK</span>
+                                                    <% } else { %>
+                                                        <span style="display:inline-flex;align-items:center;gap:6px;border-radius:9999px;padding:5px 12px;font-size:11px;font-weight:700;background:rgba(59,130,246,.16);color:#93c5fd;border:1px solid rgba(59,130,246,.4)"><i class="fas fa-calendar-check" style="font-size:10px"></i>TERENCANA</span>
+                                                    <% } %>
+                                                    <span style="display:inline-flex;align-items:center;gap:6px;border-radius:9999px;padding:5px 12px;font-size:12px;font-weight:600;background:rgba(255,255,255,.05);color:#d6c3ab;border:1px solid rgba(255,255,255,.12)"><i class="fas fa-clock" style="font-size:10px;opacity:.8"></i>Dicover <%= (r.mg_jam_mulai && r.mg_jam_selesai) ? (String(r.mg_jam_mulai).substring(0,5) + '–' + String(r.mg_jam_selesai).substring(0,5)) : 'Seharian' %></span>
+                                                    <span style="display:inline-flex;align-items:center;gap:6px;border-radius:9999px;padding:5px 12px;font-size:12px;font-weight:700;background:rgba(34,197,94,.16);color:#86efac;border:1px solid rgba(34,197,94,.4)"><i class="fas fa-briefcase" style="font-size:10px"></i>Jam kerja <%= r.jam_keluar ? fmtMin(r.effective_work_minutes) : 'belum clock-out' %></span>
+                                                    <% if (Number(r.overtime_minutes) > 0) { %>
+                                                        <span style="display:inline-flex;align-items:center;gap:6px;border-radius:9999px;padding:5px 12px;font-size:12px;font-weight:600;background:rgba(59,130,246,.16);color:#93c5fd;border:1px solid rgba(59,130,246,.4)"><i class="fas fa-hourglass-half" style="font-size:10px"></i>Lembur <%= fmtMin(r.overtime_minutes) %></span>
+                                                    <% } %>
                                                 </div>
-                                                <div class="mt-1 text-[11px] text-brown-400">Jam kerja ini sudah termasuk di total jam kerja karyawan pada tanggal tersebut.</div>
+                                                <div class="mt-2" style="font-size:11px;color:#9a8a76"><i class="fas fa-circle-info mr-1"></i>Jam kerja ini sudah termasuk di total jam kerja karyawan pada tanggal tersebut.</div>
                                             </td>
                                         </tr>
                                     <% } %>
