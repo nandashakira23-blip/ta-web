@@ -177,6 +177,7 @@ async function up(connection) {
       id_pemohon BIGINT NOT NULL,
       catatan TEXT NULL,
       status ENUM('menunggu', 'disetujui', 'ditolak') NOT NULL DEFAULT 'menunggu',
+      dilihat_pengganti TINYINT(1) NOT NULL DEFAULT 0,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       CONSTRAINT fk_permintaan_absensi_absensi FOREIGN KEY (id_absensi) REFERENCES absensi(id) ON DELETE CASCADE,

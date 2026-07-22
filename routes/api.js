@@ -4076,6 +4076,19 @@ router.get('/replacement-requests', authenticateToken, async (req, res) => {
       ORDER BY lr.created_at DESC
     `, [req.user.id]);
 
+    // Begitu user membuka daftar ini, tandai tugas pengganti URGENT yang sudah ditetapkan
+    // sebagai "dilihat" -> notifikasi di beranda berhenti muncul. (Planned yang masih 'menunggu'
+    // tetap dihitung karena butuh aksi ACC/tolak.)
+    await connection.execute(
+      `UPDATE permintaan_absensi pa
+       JOIN absensi a ON a.id = pa.id_absensi
+       SET pa.dilihat_pengganti = 1
+       WHERE pa.id_pengganti = ? AND pa.status = 'disetujui'
+         AND a.leave_type = 'urgent' AND a.status = 'disetujui'
+         AND pa.dilihat_pengganti = 0`,
+      [req.user.id]
+    );
+
     res.json({
       success: true,
       message: 'Replacement requests retrieved successfully',
@@ -4133,7 +4146,8 @@ router.get('/replacement-requests/pending-count', authenticateToken, async (req,
          AND (
            pa.status = 'menunggu'
            OR (pa.status = 'disetujui' AND a.leave_type = 'urgent'
-               AND a.status = 'disetujui' AND a.tanggal_selesai >= CURDATE())
+               AND a.status = 'disetujui' AND a.tanggal_selesai >= CURDATE()
+               AND pa.dilihat_pengganti = 0)
          )`,
       [req.user.id]
     );
