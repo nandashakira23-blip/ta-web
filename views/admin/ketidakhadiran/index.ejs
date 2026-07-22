@@ -280,6 +280,12 @@
                                                         <% } %>
                                                     <% }) %>
                                                 </select>
+                                                <div class="flex items-center gap-2">
+                                                    <input type="time" name="jam_mulai" value="<%= item.jam_mulai ? String(item.jam_mulai).substring(0,5) : '' %>" class="w-full rounded border border-brown-700/40 bg-dark-800 px-2 py-1 text-sm text-white">
+                                                    <span class="text-xs text-brown-300">s/d</span>
+                                                    <input type="time" name="jam_selesai" value="<%= item.jam_selesai ? String(item.jam_selesai).substring(0,5) : '' %>" class="w-full rounded border border-brown-700/40 bg-dark-800 px-2 py-1 text-sm text-white">
+                                                </div>
+                                                <div class="text-[10px] text-brown-400">Jam pengganti (dari–sampai) — bisa disesuaikan.</div>
                                                 <input type="text" name="catatan" placeholder="Catatan (opsional)" class="w-full rounded border border-brown-700/40 bg-dark-800 px-2 py-1 text-xs text-white">
                                                 <button type="submit" class="rounded bg-orange-700 px-3 py-1.5 text-sm text-white">Simpan Pengganti</button>
                                             </form>

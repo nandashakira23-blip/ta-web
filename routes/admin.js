@@ -3685,6 +3685,21 @@ router.post(['/absensi/:id/assign-pengganti', '/ketidakhadiran/:id/assign-pengga
             return res.redirect(redirectTarget);
         }
 
+        // Jam pengganti (dari-sampai) bila diisi manager: perbarui jam absensi + durasi.
+        const jamMulai = (req.body.jam_mulai || '').toString().trim();
+        const jamSelesai = (req.body.jam_selesai || '').toString().trim();
+        if (jamMulai && jamSelesai) {
+            const durasi = menitAntaraJam(jamMulai, jamSelesai);
+            if (durasi > 0) {
+                await db.query(
+                    `UPDATE absensi SET jam_mulai = ?, jam_selesai = ?, durasi_menit = ?,
+                         kategori = CASE WHEN kategori = 'full_day' THEN 'hourly' ELSE kategori END
+                     WHERE id = ?`,
+                    [jamMulai, jamSelesai, durasi, req.params.id]
+                );
+            }
+        }
+
         // Upsert baris pengganti. Untuk urgent, status langsung 'disetujui' (ditetapkan manager,
         // tidak perlu persetujuan pengganti). Integrasi absen-pengganti yang sudah ada memakai
         // permintaan_absensi berstatus 'disetujui', jadi otomatis nyambung.
