@@ -1401,39 +1401,28 @@ router.get('/presensi/karyawan/:id', requireAuth, async (req, res) => {
                 JSON_UNQUOTE(JSON_EXTRACT(p.data_masuk, '$.istirahat.dihitung_menit')) AS break_minutes,
                 JSON_UNQUOTE(JSON_EXTRACT(p.data_masuk, '$.face_similarity')) AS sim_in,
                 JSON_UNQUOTE(JSON_EXTRACT(p.data_keluar, '$.face_similarity')) AS sim_out,
-                (SELECT ka.nama
-                   FROM permintaan_absensi pa
-                   JOIN absensi a ON a.id = pa.id_absensi
-                   JOIN karyawan ka ON ka.id = a.id_karyawan
-                   WHERE pa.id_pengganti = p.id_karyawan
-                     AND pa.status = 'disetujui'
-                     AND a.status = 'disetujui'
-                     AND p.tanggal BETWEEN a.tanggal_mulai AND a.tanggal_selesai
-                   LIMIT 1) AS menggantikan
+                mg.m_nama AS menggantikan,
+                mg.m_nik AS mg_nik,
+                mg.m_tipe AS mg_tipe,
+                mg.m_jam_mulai AS mg_jam_mulai,
+                mg.m_jam_selesai AS mg_jam_selesai
             FROM presensi p
+            LEFT JOIN LATERAL (
+                SELECT ka.nama AS m_nama, ka.nik AS m_nik, a.leave_type AS m_tipe,
+                       TIME(a.jam_mulai) AS m_jam_mulai, TIME(a.jam_selesai) AS m_jam_selesai
+                FROM permintaan_absensi pa
+                JOIN absensi a ON a.id = pa.id_absensi
+                JOIN karyawan ka ON ka.id = a.id_karyawan
+                WHERE pa.id_pengganti = p.id_karyawan
+                  AND pa.status = 'disetujui'
+                  AND a.status = 'disetujui'
+                  AND p.tanggal BETWEEN a.tanggal_mulai AND a.tanggal_selesai
+                LIMIT 1
+            ) mg ON TRUE
             WHERE p.id_karyawan = ? ${presensiFilter}
             ORDER BY p.tanggal DESC, p.jam_masuk DESC
             LIMIT ${safeLimit} OFFSET ${safeOffset}
         `, presensiParams);
-
-        // Track record penggantian: setiap kali karyawan ini menjadi pengganti (disetujui),
-        // digabung dengan presensi-nya pada tanggal itu untuk mengambil jam kerja hasil coverage.
-        const penggantianRecords = await db.query(`
-            SELECT a.tanggal_mulai AS tanggal, a.tanggal_selesai,
-                   ka.nama AS digantikan, ka.nik AS nik_digantikan,
-                   a.leave_type,
-                   TIME(a.jam_mulai) AS leave_jam_mulai, TIME(a.jam_selesai) AS leave_jam_selesai,
-                   TIME(p.jam_masuk) AS jam_masuk, TIME(p.jam_keluar) AS jam_keluar,
-                   p.effective_work_minutes, p.total_work_minutes, p.overtime_minutes
-            FROM permintaan_absensi pa
-            JOIN absensi a ON a.id = pa.id_absensi
-            JOIN karyawan ka ON ka.id = a.id_karyawan
-            LEFT JOIN presensi p ON p.id_karyawan = pa.id_pengganti
-                AND p.tanggal BETWEEN a.tanggal_mulai AND a.tanggal_selesai
-            WHERE pa.id_pengganti = ?
-              AND pa.status = 'disetujui' AND a.status = 'disetujui'
-            ORDER BY a.tanggal_mulai DESC
-        `, [employeeId]);
 
         // Fetch office setting (lokasi kantor)
         const officeRows = await db.query(`
@@ -1451,7 +1440,6 @@ router.get('/presensi/karyawan/:id', requireAuth, async (req, res) => {
             employee,
             summary,
             records,
-            penggantianRecords,
             filters: { filterType: ft, tanggal, startDate, endDate, month, year },
             periodLabel,
             pagination,
