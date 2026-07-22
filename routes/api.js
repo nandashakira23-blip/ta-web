@@ -3746,23 +3746,29 @@ router.post('/leave-requests', authenticateToken, leaveUpload.single('lampiran')
       });
     }
 
-    // Validasi tanggal tidak tumpang tindih dengan pengajuan lain yang masih aktif
-    const [overlapRows] = await connection.execute(
-      `SELECT id FROM absensi
-       WHERE id_karyawan = ?
-         AND status NOT IN ('ditolak', 'ditolak_pengganti', 'dibatalkan')
-         AND tanggal_mulai <= ?
-         AND tanggal_selesai >= ?
-       LIMIT 1`,
-      [req.user.id, tanggal_selesai, tanggal_mulai]
-    );
-    if (overlapRows.length) {
-      await discardUploadedFile(req.file);
-      return res.status(409).json({
-        success: false,
-        message: 'Tanggal pengajuan tumpang tindih dengan pengajuan lain yang masih aktif',
-        code: 'LEAVE_DATE_OVERLAP'
-      });
+    // Validasi tanggal tidak tumpang tindih dengan pengajuan lain yang masih aktif.
+    // DEV MODE (ENFORCE_SCHEDULE != true): dilewati, supaya testing/demo berulang (mengajukan
+    // izin dengan tanggal yang sama berkali-kali) tidak terus-menerus kena 409 LEAVE_DATE_OVERLAP.
+    // Production (ENFORCE_SCHEDULE=true) tetap wajib validasi ini.
+    const bypassScheduleValidation = await isDevScheduleBypassEnabled();
+    if (!bypassScheduleValidation) {
+      const [overlapRows] = await connection.execute(
+        `SELECT id FROM absensi
+         WHERE id_karyawan = ?
+           AND status NOT IN ('ditolak', 'ditolak_pengganti', 'dibatalkan')
+           AND tanggal_mulai <= ?
+           AND tanggal_selesai >= ?
+         LIMIT 1`,
+        [req.user.id, tanggal_selesai, tanggal_mulai]
+      );
+      if (overlapRows.length) {
+        await discardUploadedFile(req.file);
+        return res.status(409).json({
+          success: false,
+          message: 'Tanggal pengajuan tumpang tindih dengan pengajuan lain yang masih aktif',
+          code: 'LEAVE_DATE_OVERLAP'
+        });
+      }
     }
 
     // Sinkron dengan form: kategori ditentukan dari ada/tidaknya jam.
