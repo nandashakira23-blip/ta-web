@@ -156,6 +156,54 @@
                     </form>
                 </div>
 
+                <!-- Track Record Penggantian (dropdown) -->
+                <% if (typeof penggantianRecords !== 'undefined' && penggantianRecords && penggantianRecords.length > 0) { %>
+                    <details class="mb-4 overflow-hidden rounded-xl border border-purple-700/40 bg-dark-800">
+                        <summary class="flex cursor-pointer select-none items-center justify-between gap-2 bg-purple-900/30 px-4 py-3">
+                            <div class="flex items-center gap-2 font-semibold text-purple-100">
+                                <i class="fas fa-user-friends"></i>Track Record Penggantian
+                                <span class="rounded-full bg-purple-700/60 px-2 py-0.5 text-[11px] text-purple-100"><%= penggantianRecords.length %></span>
+                            </div>
+                            <span class="text-xs text-purple-300">ketuk untuk lihat</span>
+                        </summary>
+                        <div class="overflow-x-auto">
+                            <% const fmtMinP = (m) => { m = Number(m||0); const h = Math.floor(m/60), mm = m%60; if (h && mm) return h+' jam '+mm+' menit'; if (h) return h+' jam'; return mm+' menit'; }; %>
+                            <table class="min-w-full divide-y divide-brown-700/40 text-sm">
+                                <thead class="bg-dark-700/60 text-brown-200">
+                                    <tr>
+                                        <th class="px-4 py-2 text-left">Tanggal</th>
+                                        <th class="px-4 py-2 text-left">Menggantikan</th>
+                                        <th class="px-4 py-2 text-left">Tipe</th>
+                                        <th class="px-4 py-2 text-left">Jam (masuk–keluar)</th>
+                                        <th class="px-4 py-2 text-left">Jam kerja</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-brown-700/30 text-brown-100">
+                                    <% penggantianRecords.forEach(pr => { %>
+                                        <tr class="hover:bg-dark-700/40">
+                                            <td class="px-4 py-2 text-white"><%= formatDateID(pr.tanggal) %></td>
+                                            <td class="px-4 py-2 font-medium text-white"><%= pr.digantikan %> <span class="text-xs text-brown-400">(<%= pr.nik_digantikan %>)</span></td>
+                                            <td class="px-4 py-2">
+                                                <% if (String(pr.leave_type) === 'urgent') { %><span class="rounded-full bg-orange-900/60 px-2 py-0.5 text-[10px] font-semibold text-orange-200">URGENT</span><% } else { %><span class="rounded-full bg-blue-900/50 px-2 py-0.5 text-[10px] font-semibold text-blue-200">PLANNED</span><% } %>
+                                            </td>
+                                            <td class="px-4 py-2 text-brown-200"><%= pr.jam_masuk || '-' %> – <%= pr.jam_keluar || '-' %></td>
+                                            <td class="px-4 py-2">
+                                                <% if (pr.jam_masuk) { %>
+                                                    <span class="font-semibold text-white"><%= fmtMinP(pr.effective_work_minutes) %></span>
+                                                    <% if (Number(pr.overtime_minutes) > 0) { %><span class="ml-1 text-[11px] text-blue-300">(+lembur <%= fmtMinP(pr.overtime_minutes) %>)</span><% } %>
+                                                <% } else { %>
+                                                    <span class="text-xs text-brown-400">belum absen</span>
+                                                <% } %>
+                                            </td>
+                                        </tr>
+                                    <% }) %>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="border-t border-brown-700/40 bg-dark-700/40 px-4 py-2 text-[11px] text-brown-400">Jam kerja hasil penggantian ini sudah termasuk dalam total jam kerja karyawan pada tanggal terkait.</div>
+                    </details>
+                <% } %>
+
                 <!-- Tabel Riwayat Presensi -->
                 <div class="overflow-hidden rounded-xl border border-brown-700/40 bg-dark-800">
                     <div class="flex flex-col gap-2 border-b border-brown-700/40 bg-dark-700 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">

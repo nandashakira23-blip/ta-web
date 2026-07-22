@@ -1416,6 +1416,25 @@ router.get('/presensi/karyawan/:id', requireAuth, async (req, res) => {
             LIMIT ${safeLimit} OFFSET ${safeOffset}
         `, presensiParams);
 
+        // Track record penggantian: setiap kali karyawan ini menjadi pengganti (disetujui),
+        // digabung dengan presensi-nya pada tanggal itu untuk mengambil jam kerja hasil coverage.
+        const penggantianRecords = await db.query(`
+            SELECT a.tanggal_mulai AS tanggal, a.tanggal_selesai,
+                   ka.nama AS digantikan, ka.nik AS nik_digantikan,
+                   a.leave_type,
+                   TIME(a.jam_mulai) AS leave_jam_mulai, TIME(a.jam_selesai) AS leave_jam_selesai,
+                   TIME(p.jam_masuk) AS jam_masuk, TIME(p.jam_keluar) AS jam_keluar,
+                   p.effective_work_minutes, p.total_work_minutes, p.overtime_minutes
+            FROM permintaan_absensi pa
+            JOIN absensi a ON a.id = pa.id_absensi
+            JOIN karyawan ka ON ka.id = a.id_karyawan
+            LEFT JOIN presensi p ON p.id_karyawan = pa.id_pengganti
+                AND p.tanggal BETWEEN a.tanggal_mulai AND a.tanggal_selesai
+            WHERE pa.id_pengganti = ?
+              AND pa.status = 'disetujui' AND a.status = 'disetujui'
+            ORDER BY a.tanggal_mulai DESC
+        `, [employeeId]);
+
         // Fetch office setting (lokasi kantor)
         const officeRows = await db.query(`
             SELECT lat_kantor, long_kantor, radius_meter
@@ -1432,6 +1451,7 @@ router.get('/presensi/karyawan/:id', requireAuth, async (req, res) => {
             employee,
             summary,
             records,
+            penggantianRecords,
             filters: { filterType: ft, tanggal, startDate, endDate, month, year },
             periodLabel,
             pagination,
