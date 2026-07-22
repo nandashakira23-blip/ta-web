@@ -1423,7 +1423,10 @@ router.get('/presensi/karyawan/:id', requireAuth, async (req, res) => {
                 WHERE pa.id_pengganti = p.id_karyawan
                   AND pa.status = 'disetujui'
                   AND a.status = 'disetujui'
-                  AND p.tanggal BETWEEN a.tanggal_mulai AND a.tanggal_selesai
+                  AND (
+                    (a.leave_type = 'urgent' AND p.tanggal = a.tanggal_mulai)
+                    OR (a.leave_type <> 'urgent' AND p.tanggal BETWEEN a.tanggal_mulai AND a.tanggal_selesai)
+                  )
                 LIMIT 1
             ) mg ON TRUE
             WHERE p.id_karyawan = ? ${presensiFilter}

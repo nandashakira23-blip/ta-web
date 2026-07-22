@@ -3838,6 +3838,11 @@ router.post('/leave-requests', authenticateToken, leaveUpload.single('lampiran')
       normalizedLeaveType = replacementId ? 'planned' : 'urgent';
     }
 
+    // Urgent = kejadian mendadak SATU hari. Paksa tanggal selesai = tanggal mulai supaya tidak
+    // pernah jadi rentang multi-hari (yang bikin label "menggantikan" muncul di banyak tanggal
+    // presensi pengganti). Planned boleh multi-hari.
+    const effectiveTanggalSelesai = normalizedLeaveType === 'urgent' ? tanggal_mulai : tanggal_selesai;
+
     const initialStatus = normalizedLeaveType === 'planned' ? 'menunggu_pengganti' : 'menunggu_manager';
     let lampiranPath = null;
     let durationMinutes = 0;
@@ -3865,7 +3870,7 @@ router.post('/leave-requests', authenticateToken, leaveUpload.single('lampiran')
       }
     } else {
       const startDate = new Date(`${tanggal_mulai}T00:00:00`);
-      const endDate = new Date(`${tanggal_selesai}T00:00:00`);
+      const endDate = new Date(`${effectiveTanggalSelesai}T00:00:00`);
       if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime()) || endDate < startDate) {
         await discardUploadedFile(req.file);
         return res.status(400).json({
@@ -3892,7 +3897,7 @@ router.post('/leave-requests', authenticateToken, leaveUpload.single('lampiran')
       normalizedLeaveType,
       normalizedCategory,
       tanggal_mulai,
-      tanggal_selesai,
+      effectiveTanggalSelesai,
       jam_mulai || null,
       jam_selesai || null,
       durationMinutes,
@@ -6664,7 +6669,10 @@ router.get('/attendance/history', authenticateToken, async (req, res) => {
           WHERE pa.id_pengganti = ad.id_karyawan
             AND pa.status = 'disetujui'
             AND a2.status = 'disetujui'
-            AND ad.tanggal BETWEEN a2.tanggal_mulai AND a2.tanggal_selesai
+            AND (
+              (a2.leave_type = 'urgent' AND ad.tanggal = a2.tanggal_mulai)
+              OR (a2.leave_type <> 'urgent' AND ad.tanggal BETWEEN a2.tanggal_mulai AND a2.tanggal_selesai)
+            )
           LIMIT 1
         ) AS menggantikan
       FROM presensi ad
