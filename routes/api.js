@@ -3735,7 +3735,10 @@ router.post('/leave-requests', authenticateToken, leaveUpload.single('lampiran')
       });
     }
 
-    if (normalizedJenis === 'sakit' && !req.file) {
+    // Izin MENDADAK (urgent) tidak wajib lampiran — surat keterangan sakit hanya diwajibkan
+    // untuk pengajuan terencana (planned), karena yang mendadak tak sempat menyiapkan surat.
+    const isUrgentLeave = (leave_type || '').toString().toLowerCase().trim() === 'urgent';
+    if (normalizedJenis === 'sakit' && !isUrgentLeave && !req.file) {
       return res.status(400).json({
         success: false,
         message: 'Surat keterangan sakit wajib dilampirkan',
