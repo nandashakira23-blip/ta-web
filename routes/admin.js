@@ -3604,7 +3604,7 @@ router.post(['/ketidakhadiran/:id/approve', '/absensi/:id/approve'], requireAuth
                     if (cand && cand.length > 0) {
                         const existing = await db.query('SELECT id FROM permintaan_absensi WHERE id_absensi = ? LIMIT 1', [req.params.id]);
                         if (existing && existing.length > 0) {
-                            await db.query(`UPDATE permintaan_absensi SET id_pengganti = ?, id_pemohon = ?, status = 'disetujui', dilihat_pengganti = 0 WHERE id_absensi = ?`, [idPengganti, leave.id_karyawan, req.params.id]);
+                            await db.query(`UPDATE permintaan_absensi SET id_pengganti = ?, id_pemohon = ?, status = 'disetujui' WHERE id_absensi = ?`, [idPengganti, leave.id_karyawan, req.params.id]);
                         } else {
                             await db.query(`INSERT INTO permintaan_absensi (id_absensi, id_pengganti, id_pemohon, status) VALUES (?, ?, ?, 'disetujui')`, [req.params.id, idPengganti, leave.id_karyawan]);
                         }
@@ -3737,7 +3737,7 @@ router.post(['/absensi/:id/assign-pengganti', '/ketidakhadiran/:id/assign-pengga
         if (existing && existing.length > 0) {
             await db.query(
                 `UPDATE permintaan_absensi
-                 SET id_pengganti = ?, id_pemohon = ?, status = 'disetujui', catatan = COALESCE(?, catatan), dilihat_pengganti = 0
+                 SET id_pengganti = ?, id_pemohon = ?, status = 'disetujui', catatan = COALESCE(?, catatan)
                  WHERE id_absensi = ?`,
                 [idPengganti, leave.id_karyawan, catatan, req.params.id]
             );

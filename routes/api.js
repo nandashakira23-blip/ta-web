@@ -4087,19 +4087,6 @@ router.get('/replacement-requests', authenticateToken, async (req, res) => {
       ORDER BY lr.created_at DESC
     `, [req.user.id]);
 
-    // Begitu user membuka daftar ini, tandai tugas pengganti URGENT yang sudah ditetapkan
-    // sebagai "dilihat" -> notifikasi di beranda berhenti muncul. (Planned yang masih 'menunggu'
-    // tetap dihitung karena butuh aksi ACC/tolak.)
-    await connection.execute(
-      `UPDATE permintaan_absensi pa
-       JOIN absensi a ON a.id = pa.id_absensi
-       SET pa.dilihat_pengganti = 1
-       WHERE pa.id_pengganti = ? AND pa.status = 'disetujui'
-         AND a.leave_type = 'urgent' AND a.status = 'disetujui'
-         AND pa.dilihat_pengganti = 0`,
-      [req.user.id]
-    );
-
     res.json({
       success: true,
       message: 'Replacement requests retrieved successfully',
@@ -4146,20 +4133,14 @@ router.get('/replacement-requests/pending-count', authenticateToken, async (req,
   const connection = await getConnection();
   try {
     // Hitung tugas pengganti yang perlu perhatian di beranda:
-    //  - planned yang masih menunggu keputusan user (perlu ACC/tolak), DAN
-    //  - urgent yang sudah DISETUJUI manager & user ditunjuk sebagai pengganti (info: wajib hadir),
-    //    selama tanggalnya belum lewat.
+    // hanya yang masih menunggu keputusan user (perlu ACC/tolak).
+    // Begitu disetujui/ditolak -> langsung hilang dari badge.
     const [rows] = await connection.execute(
       `SELECT COUNT(*) AS pending
        FROM permintaan_absensi pa
        JOIN absensi a ON a.id = pa.id_absensi
        WHERE pa.id_pengganti = ?
-         AND (
-           pa.status = 'menunggu'
-           OR (pa.status = 'disetujui' AND a.leave_type = 'urgent'
-               AND a.status = 'disetujui' AND a.tanggal_selesai >= CURDATE()
-               AND pa.dilihat_pengganti = 0)
-         )`,
+         AND pa.status = 'menunggu'`,
       [req.user.id]
     );
     res.json({
