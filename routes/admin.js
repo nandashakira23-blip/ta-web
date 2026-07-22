@@ -62,6 +62,13 @@ function getCurrentDateWITA() {
     return `${year}-${month}-${day}`;
 }
 
+// Sama seperti isDevScheduleBypassEnabled di routes/api.js: ENFORCE_SCHEDULE=true mematikan
+// bypass dev walau NODE_ENV=development; selain itu ikut mode development.
+function isDevScheduleBypassEnabled() {
+    if (String(process.env.ENFORCE_SCHEDULE || '').toLowerCase() === 'true') return false;
+    return (process.env.NODE_ENV || 'development') === 'development';
+}
+
 // Selisih menit antara dua jam "HH:MM" (durasi izin sebagian)
 function menitAntaraJam(a, b) {
     const parse = (s) => { const m = /^(\d{1,2}):(\d{2})/.exec(String(s || '').trim()); return m ? (Number(m[1]) * 60 + Number(m[2])) : NaN; };
@@ -3614,7 +3621,8 @@ router.post(['/ketidakhadiran/:id/approve', '/absensi/:id/approve'], requireAuth
         }
         // Kreditkan lembur "menggantikan" ke pengganti bila ia sudah terlanjur clock-out.
         try {
-            await recalcSubstitutePresensiForLeave(dbOriginal, req.params.id);
+            const devToday = isDevScheduleBypassEnabled() ? getCurrentDateWITA() : null;
+            await recalcSubstitutePresensiForLeave(dbOriginal, req.params.id, devToday);
         } catch (subErr) {
             console.error('Gagal recompute presensi pengganti setelah approve:', subErr.message);
         }
@@ -3740,7 +3748,8 @@ router.post(['/absensi/:id/assign-pengganti', '/ketidakhadiran/:id/assign-pengga
 
         // Bila pengganti sudah terlanjur clock-out, kreditkan lembur "menggantikan" sekarang.
         try {
-            await recalcSubstitutePresensiForLeave(dbOriginal, req.params.id);
+            const devToday = isDevScheduleBypassEnabled() ? getCurrentDateWITA() : null;
+            await recalcSubstitutePresensiForLeave(dbOriginal, req.params.id, devToday);
         } catch (subErr) {
             console.error('Gagal recompute presensi pengganti setelah assign:', subErr.message);
         }

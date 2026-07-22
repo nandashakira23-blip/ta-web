@@ -6008,6 +6008,11 @@ router.post('/attendance/checkout', authenticateToken, upload.array('photo', 5),
     // jam menutupi yang berada DI LUAR shift sendiri dihitung sebagai lembur (menggantikan).
     let coverageWindow = null;
     try {
+      // DEV MODE (ENFORCE_SCHEDULE != true): jangan syaratkan tanggal absen benar-benar berada
+      // dalam rentang tanggal izin, supaya penetapan pengganti tetap bisa ditest walau tanggal
+      // pengajuan izin berbeda dari tanggal presensi (mengikuti pola bypass jadwal lain di dev).
+      const dateCondition = bypassScheduleValidation ? '1=1' : '? BETWEEN a.tanggal_mulai AND a.tanggal_selesai';
+      const covParams = bypassScheduleValidation ? [req.user.id] : [req.user.id, today];
       const [covRows] = await connection.execute(
         `SELECT TIME(COALESCE(a.jam_mulai, sc.jam_masuk)) AS cov_start,
                 TIME(COALESCE(a.jam_selesai, sc.jam_keluar)) AS cov_end
@@ -6019,10 +6024,10 @@ router.post('/attendance/checkout', authenticateToken, upload.array('photo', 5),
           WHERE pa.id_pengganti = ?
             AND pa.status = 'disetujui'
             AND a.status IN ('approved','disetujui')
-            AND ? BETWEEN a.tanggal_mulai AND a.tanggal_selesai
+            AND ${dateCondition}
           ORDER BY (a.jam_mulai IS NULL), a.id DESC
           LIMIT 1`,
-        [req.user.id, today]
+        covParams
       );
       if (covRows.length && covRows[0].cov_start && covRows[0].cov_end) {
         coverageWindow = { start: covRows[0].cov_start, end: covRows[0].cov_end };

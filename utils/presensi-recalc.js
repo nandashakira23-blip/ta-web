@@ -129,9 +129,13 @@ async function recalcPresensiForLeave(connection, absensiId) {
  *
  * @param {*} connection  koneksi/pool dengan .execute (config/database)
  * @param {number} absensiId  id pengajuan izin (absensi)
+ * @param {string} [devToday]  DEV MODE saja: bila diisi (tanggal WITA "YYYY-MM-DD"), presensi
+ *   dicocokkan ke tanggal ini alih-alih rentang tanggal izin — supaya testing tetap jalan
+ *   walau tanggal pengajuan izin berbeda dari tanggal presensi (repeatable attendance dev mode).
+ *   Kosongkan di production agar tetap ketat sesuai rentang tanggal izin.
  * @returns {Promise<number>} jumlah record presensi pengganti yang diperbarui
  */
-async function recalcSubstitutePresensiForLeave(connection, absensiId) {
+async function recalcSubstitutePresensiForLeave(connection, absensiId, devToday = null) {
   const [leaveRows] = await connection.execute(
     `SELECT id_karyawan, tanggal_mulai, tanggal_selesai, status,
             TIME(jam_mulai) AS jam_mulai, TIME(jam_selesai) AS jam_selesai
@@ -179,15 +183,17 @@ async function recalcSubstitutePresensiForLeave(connection, absensiId) {
     );
     const subSchedule = subSchedRows[0] || null;
 
+    const dateFilter = devToday ? 'tanggal = ?' : 'tanggal BETWEEN ? AND ?';
+    const dateParams = devToday ? [devToday] : [leave.tanggal_mulai, leave.tanggal_selesai];
     const [presRows] = await connection.execute(
       `SELECT id, DATE_FORMAT(tanggal, '%Y-%m-%d') AS tgl,
               TIME(jam_masuk) AS ci, TIME(jam_keluar) AS co, data_masuk
          FROM presensi
         WHERE id_karyawan = ?
-          AND tanggal BETWEEN ? AND ?
+          AND ${dateFilter}
           AND jam_masuk IS NOT NULL
           AND jam_keluar IS NOT NULL`,
-      [substituteId, leave.tanggal_mulai, leave.tanggal_selesai]
+      [substituteId, ...dateParams]
     );
 
     for (const p of presRows) {
