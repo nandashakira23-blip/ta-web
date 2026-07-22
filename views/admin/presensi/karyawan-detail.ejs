@@ -192,19 +192,19 @@
                                         <td class="px-4 py-3">
                                             <div class="font-medium text-white"><%= formatDateID(r.tanggal) %></div>
                                             <% if (r.menggantikan) { %>
-                                                <button type="button" class="mg-toggle mt-1 inline-flex items-center gap-1 rounded-full border border-purple-600/50 bg-purple-900/50 px-2 py-0.5 text-[11px] text-purple-200 hover:bg-purple-800/60" data-target="mg-<%= r.id %>">
-                                                    <i class="fas fa-user-friends"></i>Menggantikan <%= r.menggantikan %>
-                                                    <i class="fas fa-chevron-down mg-chev text-[9px]" style="transition:transform .15s"></i>
+                                                <button type="button" class="mg-toggle" data-target="mg-<%= r.id %>" style="display:inline-flex;align-items:center;gap:6px;margin-top:4px;border-radius:9999px;padding:3px 10px;font-size:11px;font-weight:600;line-height:1.4;background:rgba(147,51,234,.25);color:#e9d5ff;border:1px solid rgba(168,85,247,.45);cursor:pointer">
+                                                    <i class="fas fa-user-friends" style="font-size:10px;opacity:.85"></i>Menggantikan <%= r.menggantikan %>
+                                                    <i class="fas fa-chevron-down mg-chev" style="font-size:9px;transition:transform .15s"></i>
                                                 </button>
                                             <% } %>
                                         </td>
                                         <td class="px-4 py-3 text-sm text-brown-200">
                                             <div><%= r.jam_masuk || '-' %></div>
-                                            <% if (r.jam_masuk && r.sim_in != null && r.sim_in !== '' && !isNaN(Number(r.sim_in))) { %><div class="text-[10px] text-brown-400 mt-0.5" title="Kemiripan wajah saat clock-in"><i class="fas fa-smile mr-0.5"></i>Wajah <%= Math.round(Number(r.sim_in)*100) %>%</div><% } %>
+                                            <% if (r.jam_masuk && r.sim_in != null && r.sim_in !== '' && !isNaN(Number(r.sim_in))) { %><div class="text-brown-400" style="font-size:10px;margin-top:2px" title="Kemiripan wajah saat clock-in"><i class="fas fa-smile mr-0.5"></i>Wajah <%= Math.round(Number(r.sim_in)*100) %>%</div><% } %>
                                         </td>
                                         <td class="px-4 py-3 text-sm text-brown-200">
                                             <div><%= r.jam_keluar || '-' %></div>
-                                            <% if (r.jam_keluar && r.sim_out != null && r.sim_out !== '' && !isNaN(Number(r.sim_out))) { %><div class="text-[10px] text-brown-400 mt-0.5" title="Kemiripan wajah saat clock-out"><i class="fas fa-smile mr-0.5"></i>Wajah <%= Math.round(Number(r.sim_out)*100) %>%</div><% } %>
+                                            <% if (r.jam_keluar && r.sim_out != null && r.sim_out !== '' && !isNaN(Number(r.sim_out))) { %><div class="text-brown-400" style="font-size:10px;margin-top:2px" title="Kemiripan wajah saat clock-out"><i class="fas fa-smile mr-0.5"></i>Wajah <%= Math.round(Number(r.sim_out)*100) %>%</div><% } %>
                                         </td>
                                         <td class="px-4 py-3">
                                             <% const st = String(r.status || '').toLowerCase(); %>
