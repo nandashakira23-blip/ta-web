@@ -1550,6 +1550,61 @@ router.post('/auth/activate', upload.any(), async (req, res) => {
       });
     }
 
+    // VALIDASI: 1 orang = 1 akun. Cek apakah wajah sudah terdaftar di sistem.
+    console.log('Checking for duplicate face enrollment...');
+    const [existingFaceRows] = await connection.execute(`
+      SELECT fr.id, fr.id_karyawan, fr.face_encoding, k.nama, k.nik
+      FROM karyawan_face_reference fr
+      INNER JOIN karyawan k ON fr.id_karyawan = k.id
+      WHERE fr.is_active = TRUE
+        AND k.deleted_at IS NULL
+        AND k.id != ?
+    `, [karyawan.id]);
+
+    if (existingFaceRows.length > 0) {
+      // Parse existing face encodings
+      const existingFaces = existingFaceRows
+        .map(row => {
+          try {
+            const parsed = JSON.parse(row.face_encoding);
+            return {
+              id_karyawan: row.id_karyawan,
+              nama: row.nama,
+              nik: row.nik,
+              descriptor: parsed.descriptor || []
+            };
+          } catch (e) {
+            return null;
+          }
+        })
+        .filter(f => f && Array.isArray(f.descriptor) && f.descriptor.length === 128);
+
+      console.log(`Loaded ${existingFaces.length} existing face references for duplicate check`);
+
+      // Bandingkan dengan wajah yang baru di-upload
+      for (const newFace of detectedReferenceFaces) {
+        const matchResults = await compareFaces(existingFaces, [newFace.face]);
+        
+        if (matchResults.length > 0 && matchResults[0].isMatch) {
+          const matched = matchResults[0].bestMatch;
+          const matchedEmployee = existingFaces[matched.referenceIndex];
+          
+          await cleanupUploadedFiles();
+          return res.status(400).json({
+            success: false,
+            message: `Wajah ini sudah terdaftar atas nama ${matchedEmployee.nama} (NIK: ${matchedEmployee.nik}). Satu orang hanya boleh memiliki satu akun.`,
+            code: 'FACE_ALREADY_REGISTERED',
+            details: {
+              registered_to: matchedEmployee.nama,
+              nik: matchedEmployee.nik,
+              similarity: Math.round(matched.similarity * 100)
+            }
+          });
+        }
+      }
+      console.log('No duplicate face found — enrollment can proceed');
+    }
+
     for (const referenceFace of detectedReferenceFaces) {
       referenceFace.storedPath = await persistUploadedFile(referenceFace.file, { folder: 'uploads/karyawan' });
     }
@@ -3399,6 +3454,59 @@ router.post('/face/re-enroll', authenticateToken, upload.single('face_photo'), a
       });
     }
 
+    // VALIDASI: 1 orang = 1 akun. Cek apakah wajah sudah terdaftar di sistem.
+    console.log('Checking for duplicate face enrollment (re-enroll)...');
+    const [existingFaceRows] = await connection.execute(`
+      SELECT fr.id, fr.id_karyawan, fr.face_encoding, k.nama, k.nik
+      FROM karyawan_face_reference fr
+      INNER JOIN karyawan k ON fr.id_karyawan = k.id
+      WHERE fr.is_active = TRUE
+        AND k.deleted_at IS NULL
+        AND k.id != ?
+    `, [req.user.id]);
+
+    if (existingFaceRows.length > 0) {
+      // Parse existing face encodings
+      const existingFaces = existingFaceRows
+        .map(row => {
+          try {
+            const parsed = JSON.parse(row.face_encoding);
+            return {
+              id_karyawan: row.id_karyawan,
+              nama: row.nama,
+              nik: row.nik,
+              descriptor: parsed.descriptor || []
+            };
+          } catch (e) {
+            return null;
+          }
+        })
+        .filter(f => f && Array.isArray(f.descriptor) && f.descriptor.length === 128);
+
+      console.log(`Loaded ${existingFaces.length} existing face references for duplicate check`);
+
+      // Bandingkan dengan wajah yang baru di-upload
+      const matchResults = await compareFaces(existingFaces, faces);
+      
+      if (matchResults.length > 0 && matchResults[0].isMatch) {
+        const matched = matchResults[0].bestMatch;
+        const matchedEmployee = existingFaces[matched.referenceIndex];
+        
+        await discardUploadedFile(req.file);
+        return res.status(400).json({
+          success: false,
+          message: `Wajah ini sudah terdaftar atas nama ${matchedEmployee.nama} (NIK: ${matchedEmployee.nik}). Satu orang hanya boleh memiliki satu akun.`,
+          code: 'FACE_ALREADY_REGISTERED',
+          details: {
+            registered_to: matchedEmployee.nama,
+            nik: matchedEmployee.nik,
+            similarity: Math.round(matched.similarity * 100)
+          }
+        });
+      }
+      console.log('No duplicate face found — re-enrollment can proceed');
+    }
+
     await connection.execute(
       'UPDATE karyawan_face_reference SET is_active = FALSE WHERE id_karyawan = ?',
       [req.user.id]
@@ -3886,6 +3994,9 @@ router.post('/leave-requests', authenticateToken, leaveUpload.single('lampiran')
 
     lampiranPath = req.file ? await persistUploadedFile(req.file, { folder: 'uploads/leave' }) : null;
 
+    // BEGIN TRANSACTION: atomic insert absensi + permintaan_absensi
+    await connection.beginTransaction();
+
     const [result] = await connection.execute(`
       INSERT INTO absensi (
         id_karyawan, jenis, leave_type, kategori, tanggal_mulai, tanggal_selesai,
@@ -3914,6 +4025,8 @@ router.post('/leave-requests', authenticateToken, leaveUpload.single('lampiran')
       `, [result.insertId, replacementId, req.user.id]);
     }
 
+    await connection.commit();
+
     res.status(201).json({
       success: true,
       message: replacementId
@@ -3927,7 +4040,18 @@ router.post('/leave-requests', authenticateToken, leaveUpload.single('lampiran')
       }
     });
   } catch (error) {
+    await connection.rollback().catch(() => {});
     console.error('Create leave request error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      errno: error.errno,
+      sqlState: error.sqlState,
+      sqlMessage: error.sqlMessage,
+      sql: error.sql,
+      replacementId: req.body.id_pengganti,
+      userId: req.user?.id
+    });
     await discardUploadedFile(req.file);
     res.status(500).json({
       success: false,
