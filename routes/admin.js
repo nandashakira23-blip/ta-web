@@ -3934,6 +3934,17 @@ router.post('/testing/presensi/reset', requireAuth, requireSuperAdmin, async (re
     }
 });
 
+// Helper: path persegi panjang bersudut tumpul (dipakai badge status di stage 'match').
+function roundRectMatch(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+}
+
 // Pipeline stage: serve gambar tahapan face recognition (bbox / align / encode / match).
 // Gunakan cache per stage + photo agar tiap stage hasilnya diskal.
 async function servePipelineStage(res, photoPath, cacheKeyBase, stage, extra) {
@@ -4040,37 +4051,90 @@ async function servePipelineStage(res, photoPath, cacheKeyBase, stage, extra) {
             const probeImg = await makeMatchFace(src, extra.isMatch ? '#22c55e' : '#ef4444');
             let refImg = null;
             if (refPath) refImg = await makeMatchFace(refPath, '#22c55e');
+
+            // Palet netral gaya figur laporan — warna cuma dipakai untuk makna semantik (bbox/badge status).
+            const INK = '#1f2937', MUTED = '#6b7280', FAINT = '#9ca3af', LINE = '#e5e7eb';
+
             const gap = 24;
-            const labelH = 60;
             const w = 360 + (refImg ? gap + 360 : 0);
-            const h = 360 + labelH;
+            // Tinggi dihitung eksplisit dari tiap baris konten (bukan angka ajaib) supaya tidak ada teks terpotong.
+            const captionY = 360 + 30;      // baseline label "Probe" / "Referensi"
+            const statLabelY = captionY + 34;  // baseline label kecil (KEMIRIPAN, dst.)
+            const statValueY = statLabelY + 20; // baseline nilai bold
+            const badgeY = statValueY + 26;     // top posisi badge status
+            const badgeH = 32;
+            const h = badgeY + badgeH + 18;
+
             const cv = createCanvas(w, h);
             const ctx = cv.getContext('2d');
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, w, h);
+
             ctx.drawImage(probeImg, 0, 0, 360, 360);
-            ctx.fillStyle = '#1a56b0';
-            ctx.font = 'bold 14px sans-serif';
+            ctx.fillStyle = INK;
+            ctx.font = 'bold 13px sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText('Probe (bbox + landmark)', 180, 378);
+            ctx.fillText('Probe', 180, captionY);
             if (refImg) {
                 ctx.drawImage(refImg, 360 + gap, 0, 360, 360);
-                ctx.fillStyle = '#0a7d2c';
-                ctx.fillText('Referensi (bbox + landmark)', 360 + gap + 180, 378);
+                ctx.fillText('Referensi', 360 + gap + 180, captionY);
+                // Garis pembatas tipis antar foto
+                ctx.strokeStyle = LINE;
+                ctx.beginPath();
+                ctx.moveTo(360 + gap / 2, 0);
+                ctx.lineTo(360 + gap / 2, 360);
+                ctx.stroke();
             }
-            // Skor kemiripan + jarak
-            const infoY = refImg ? 405 : 395;
-            ctx.fillStyle = '#333';
-            ctx.font = '13px sans-serif';
+
+            // Garis pembatas sebelum baris statistik
+            ctx.strokeStyle = LINE;
+            ctx.beginPath();
+            ctx.moveTo(0, captionY + 10);
+            ctx.lineTo(w, captionY + 10);
+            ctx.stroke();
+
+            // Statistik: 3 kelompok label+nilai merata, dipisah garis tipis (bukan karakter "|").
             const simStr = extra.similarity != null ? (Math.round(Number(extra.similarity) * 1000) / 10).toString().replace('.', ',') + '%' : '-';
             const distStr = extra.distance != null ? Number(extra.distance).toFixed(4) : '-';
             const thresholdStr = extra.threshold != null ? Number(extra.threshold).toFixed(2) : '0.60';
+            const stats = [
+                { label: 'KEMIRIPAN', value: simStr },
+                { label: 'JARAK EUCLIDEAN', value: distStr },
+                { label: 'AMBANG', value: thresholdStr }
+            ];
+            const colW = w / stats.length;
+            stats.forEach((s, i) => {
+                const cx = colW * i + colW / 2;
+                ctx.fillStyle = MUTED;
+                ctx.font = '10px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(s.label, cx, statLabelY);
+                ctx.fillStyle = INK;
+                ctx.font = 'bold 15px sans-serif';
+                ctx.fillText(s.value, cx, statValueY);
+                if (i > 0) {
+                    ctx.strokeStyle = LINE;
+                    ctx.beginPath();
+                    ctx.moveTo(colW * i, statLabelY - 12);
+                    ctx.lineTo(colW * i, statValueY + 4);
+                    ctx.stroke();
+                }
+            });
+
+            // Badge status: pil hijau/merah, jelas jadi kesimpulan akhir.
             const matchStr = extra.isMatch ? 'COCOK' : 'TIDAK COCOK';
-            const matchClr = extra.isMatch ? '#0a7d2c' : '#b00020';
-            ctx.fillText(`Kemiripan: ${simStr}  |  Jarak Euclidean: ${distStr}  |  Ambang: ${thresholdStr}  |`, w / 2, infoY);
-            ctx.fillStyle = matchClr;
-            ctx.font = 'bold 14px sans-serif';
-            ctx.fillText(`Status: ${matchStr}`, w / 2, infoY + 18);
+            const badgeBg = extra.isMatch ? '#16a34a' : '#dc2626';
+            ctx.font = 'bold 13px sans-serif';
+            const badgeTextW = ctx.measureText(matchStr).width;
+            const badgeW = badgeTextW + 44;
+            const badgeX = (w - badgeW) / 2;
+            ctx.fillStyle = badgeBg;
+            roundRectMatch(ctx, badgeX, badgeY, badgeW, badgeH, badgeH / 2);
+            ctx.fill();
+            ctx.fillStyle = '#ffffff';
+            ctx.textAlign = 'center';
+            ctx.fillText(matchStr, w / 2, badgeY + badgeH / 2 + 5);
+
             out = cv.toBuffer('image/jpeg', { quality: 0.92 });
         } else if (stage === 'bbox') {
             // Bounding box: crop wajah + kotak (face detection jalan di sini)
