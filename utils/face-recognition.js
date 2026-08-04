@@ -453,8 +453,8 @@ async function generateEncodingDiagram(imagePath, descriptor) {
 
     // Landmarks
     if (positions) {
-      const lw = Math.max(0.8, faceSz * 0.002);
-      const dr = Math.max(1.5, faceSz * 0.006);
+      const lw = Math.max(1.5, faceSz * 0.006);
+      const dr = Math.max(3, faceSz * 0.014);
       function lx(px) { return (px - sx) * scale; }
       function ly(py) { return (py - sy) * scale; }
       function poly(indices, color, w) {

@@ -3999,12 +3999,12 @@ async function servePipelineStage(res, photoPath, cacheKeyBase, stage, extra) {
 
                 // Bounding box
                 tmpCtx.strokeStyle = boxColor;
-                tmpCtx.lineWidth = Math.max(2.5, Math.round(360 * 0.012));
+                tmpCtx.lineWidth = Math.max(3, Math.round(360 * 0.02));
                 tmpCtx.strokeRect((box.x - left) * scale, (box.y - top) * scale, box.width * scale, box.height * scale);
 
                 // Landmarks
                 if (positions) {
-                    const lw = Math.max(0.6, 360 * 0.0015);
+                    const lw = Math.max(1.5, 360 * 0.006);
                     function lx(px) { return (px - left) * scale; }
                     function ly(py) { return (py - top) * scale; }
                     function poly(indices, color, w) {
@@ -4024,6 +4024,14 @@ async function servePipelineStage(res, photoPath, cacheKeyBase, stage, extra) {
                     poly([42,43,44,45,46,47,42], '#3b82f6', lw);
                     poly([48,49,50,51,52,53,54,55,56,57,58,59,48], '#ef4444', lw * 1.2);
                     poly([60,61,62,63,64,65,66,67,60], '#ef4444', lw * 0.7);
+                    // Dot di tiap titik landmark (tiap kelipatan 3)
+                    const dr = Math.max(2, 360 * 0.012);
+                    positions.forEach((p, i) => {
+                        if (i % 3 !== 0) return;
+                        tmpCtx.beginPath();
+                        tmpCtx.arc(lx(p.x), ly(p.y), dr, 0, 2*Math.PI);
+                        tmpCtx.fillStyle = '#3b82f6'; tmpCtx.fill();
+                    });
                 }
                 const drawn = tmpCanvas.toBuffer('image/jpeg', { quality: 0.92 });
                 return loadImage(drawn);
