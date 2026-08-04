@@ -439,11 +439,12 @@ async function generateEncodingDiagram(imagePath, descriptor) {
   if (box) {
     const fcx = box.x + box.width / 2, fcy = box.y + box.height / 2;
     const side = Math.round(Math.max(box.width, box.height) * 1.35);
-    const sx = Math.max(0, Math.round(fcx - side / 2));
-    const sy = Math.max(0, Math.round(fcy - side / 2));
-    const sw = Math.min(side, img.width - sx);
-    const sh = Math.min(side, img.height - sy);
-    tctx.drawImage(img, sx, sy, sw, sh, 0, 0, faceSz, faceSz);
+    // Pastikan crop selalu square penuh (adjust posisi, bukan potong dimensi)
+    let sx = Math.round(fcx - side / 2);
+    let sy = Math.round(fcy - side / 2);
+    sx = Math.max(0, Math.min(sx, img.width - side));
+    sy = Math.max(0, Math.min(sy, img.height - side));
+    tctx.drawImage(img, sx, sy, side, side, 0, 0, faceSz, faceSz);
     const scale = faceSz / side;
 
     // Bounding box hijau (tebal, jelas terlihat)
