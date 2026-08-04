@@ -3934,43 +3934,101 @@ router.post('/testing/presensi/reset', requireAuth, requireSuperAdmin, async (re
     }
 });
 
-router.get('/testing/probe/:pid/:type', requireAuth, requireSuperAdmin, (req, res) => {
+// Pipeline stage: serve gambar tahapan face recognition (bbox / align / encode / match).
+// Gunakan cache per stage + photo agar tiap stage hasilnya diskal.
+async function servePipelineStage(res, photoPath, cacheKeyBase, stage, extra) {
     const sharp = require('sharp');
-    const pid = parseInt(req.params.pid, 10);
-    const type = req.params.type === 'keluar' ? 'keluar' : 'masuk';
-    if (!pid) return res.status(400).end();
-    db.query('SELECT data_' + type + ' AS d FROM presensi WHERE id = ?', [pid], async (err, rows) => {
-        if (err || !rows || !rows.length) return res.status(404).end();
-        let data = {};
-        try { data = typeof rows[0].d === 'string' ? JSON.parse(rows[0].d || '{}') : (rows[0].d || {}); } catch (e) {}
-        const photoPath = data && data.foto;
-        if (!photoPath) return res.status(404).end();
-        if (/^https?:\/\//.test(photoPath)) return res.redirect(photoPath);
-        const src = [path.join(__dirname, '..', 'public', photoPath), path.join(__dirname, '..', photoPath)]
-            .find(p => fs.existsSync(p));
-        if (!src) return res.status(404).end();
-        const cacheDir = path.join(__dirname, '..', 'public', 'uploads', 'faces-crop');
-        const cacheFile = path.join(cacheDir, 'probe-' + pid + '-' + type + '-hd.jpg');
-        try {
-            if (fs.existsSync(cacheFile)) return res.sendFile(cacheFile);
-            if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
+    if (!photoPath) return res.status(404).end();
+    if (/^https?:\/\//.test(photoPath)) return res.redirect(photoPath);
+    const src = [path.join(__dirname, '..', 'public', photoPath), path.join(__dirname, '..', photoPath)]
+        .find(p => fs.existsSync(p));
+    if (!src) return res.status(404).end();
+    const cacheDir = path.join(__dirname, '..', 'public', 'uploads', 'faces-crop');
+    const cacheFile = path.join(cacheDir, cacheKeyBase + '-' + (stage || 'bbox') + '.jpg');
+    try {
+        if (fs.existsSync(cacheFile)) {
+            res.setHeader('Cache-Control', 'public, max-age=86400');
+            return res.sendFile(cacheFile);
+        }
+        if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
 
-            let out = null;
-            let tmpFile = null;
+        let out = null;
+        const { detectFaces, drawFaceLandmarks, generateEncodingChart } = require('../utils/face-recognition');
+
+        if (stage === 'align') {
+            // Face alignment: gambar 68 landmark di atas wajah
+            out = await drawFaceLandmarks(src);
+            // Kecilkan agar respons ringan
+            out = await sharp(out).resize(720, 720, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 90 }).toBuffer();
+        } else if (stage === 'encode') {
+            // Ekstraksi encoding: deteksi wajah, ambil descriptor 128-d, visualisasi bar chart
+            const faces = await detectFaces(src);
+            if (faces && faces.length > 0 && faces[0].descriptor) {
+                out = await generateEncodingChart(faces[0].descriptor);
+            } else {
+                const { createCanvas } = require('canvas');
+                const cv = createCanvas(500, 150);
+                const ctx = cv.getContext('2d');
+                ctx.fillStyle = '#ef4444';
+                ctx.font = '16px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('Encoding gagal — wajah tidak terdeteksi', 250, 75);
+                out = cv.toBuffer('image/jpeg', { quality: 0.9 });
+            }
+        } else if (stage === 'match' && extra) {
+            // Pencocokan wajah: side-by-side probe vs referensi
+            const refPath = [path.join(__dirname, '..', 'public', extra.refPhoto), path.join(__dirname, '..', extra.refPhoto)]
+                .find(p => fs.existsSync(p));
+            const { createCanvas, loadImage } = require('canvas');
+            const probeBuf = await sharp(src).rotate().resize(360, 360, { fit: 'cover', position: 'attention' }).jpeg({ quality: 90 }).toBuffer();
+            const probeImg = await loadImage(probeBuf);
+            let refImg = null;
+            if (refPath) {
+                const refBuf = await sharp(refPath).rotate().resize(360, 360, { fit: 'cover', position: 'attention' }).jpeg({ quality: 90 }).toBuffer();
+                refImg = await loadImage(refBuf);
+            }
+            const gap = 24;
+            const labelH = 60;
+            const w = 360 + (refImg ? gap + 360 : 0);
+            const h = 360 + labelH;
+            const cv = createCanvas(w, h);
+            const ctx = cv.getContext('2d');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, w, h);
+            ctx.drawImage(probeImg, 0, 0, 360, 360);
+            ctx.fillStyle = '#1a56b0';
+            ctx.font = 'bold 14px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Foto Probe (Absen)', 180, 378);
+            if (refImg) {
+                ctx.drawImage(refImg, 360 + gap, 0, 360, 360);
+                ctx.fillStyle = '#0a7d2c';
+                ctx.fillText('Foto Referensi (Enrollment)', 360 + gap + 180, 378);
+            }
+            // Skor kemiripan + jarak
+            const infoY = refImg ? 405 : 395;
+            ctx.fillStyle = '#333';
+            ctx.font = '13px sans-serif';
+            const simStr = extra.similarity != null ? (Math.round(Number(extra.similarity) * 1000) / 10).toString().replace('.', ',') + '%' : '-';
+            const distStr = extra.distance != null ? Number(extra.distance).toFixed(4) : '-';
+            const thresholdStr = extra.threshold != null ? Number(extra.threshold).toFixed(2) : '0.60';
+            const matchStr = extra.isMatch ? 'COCOK' : 'TIDAK COCOK';
+            const matchClr = extra.isMatch ? '#0a7d2c' : '#b00020';
+            ctx.fillText(`Kemiripan: ${simStr}  |  Jarak Euclidean: ${distStr}  |  Ambang: ${thresholdStr}  |`, w / 2, infoY);
+            ctx.fillStyle = matchClr;
+            ctx.font = 'bold 14px sans-serif';
+            ctx.fillText(`Status: ${matchStr}`, w / 2, infoY + 18);
+            out = cv.toBuffer('image/jpeg', { quality: 0.92 });
+        } else {
+            // Default bbox: crop + kotak hijau (existing logic)
             try {
-                const { detectFaces } = require('../utils/face-recognition');
                 const { createCanvas, loadImage } = require('canvas');
-                // Downscale (maks 1024px) SEBELUM deteksi CNN -> tekan pemakaian memori biar
-                // banyak thumbnail bisa digenerate tanpa bikin RAM meledak (OOM).
-                const orientedBuf = await sharp(src).rotate().resize(1024, 1024, { fit: 'inside', withoutEnlargement: true }).toBuffer();
-                tmpFile = path.join(cacheDir, 'tmp-probe-' + pid + '-' + type + '-' + Date.now() + '.jpg');
-                fs.writeFileSync(tmpFile, orientedBuf);
-                const faces = await detectFaces(tmpFile); // box dalam koordinat gambar ter-downscale
+                const faces = await detectFaces(src);
                 if (faces && faces.length && faces[0].box) {
                     const box = faces[0].box;
-                    const img = await loadImage(orientedBuf); // gambar SAMA (ter-downscale) -> koordinat box cocok
+                    const orientedBuf = await sharp(src).rotate().toBuffer();
+                    const img = await loadImage(orientedBuf);
                     const cx = (box.xMin + box.xMax) / 2, cy = (box.yMin + box.yMax) / 2;
-                    // crop PERSEGI rapat ke wajah (zoom), tidak melebihi ukuran gambar
                     let side = Math.round(Math.max(box.width, box.height) * 1.35);
                     side = Math.max(1, Math.min(side, img.width, img.height));
                     const left = Math.max(0, Math.min(Math.round(cx - side / 2), img.width - side));
@@ -3982,179 +4040,156 @@ router.get('/testing/probe/:pid/:type', requireAuth, requireSuperAdmin, (req, re
                     ctx.lineWidth = Math.max(3, Math.round(side * 0.012));
                     ctx.strokeRect(box.xMin - left, box.yMin - top, box.width, box.height);
                     const drawn = canvas.toBuffer('image/jpeg', { quality: 0.92 });
-                    // pertahankan resolusi asli crop (jangan diperbesar); batasi maksimum 512 agar tetap tajam
                     const target = Math.min(side, 512);
                     out = await sharp(drawn).resize(target, target, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 92 }).toBuffer();
                 }
-            } catch (e) {
-                console.warn('probe face-detect/draw gagal, pakai crop biasa:', e.message);
-            } finally {
-                if (tmpFile) { try { fs.unlinkSync(tmpFile); } catch (e) {} }
-            }
-            if (!out) { // fallback: crop otomatis kalau wajah tak terdeteksi
-                out = await sharp(src).rotate().resize(480, 480, { fit: 'cover', position: 'attention' }).jpeg({ quality: 90 }).toBuffer();
-            }
-            fs.writeFileSync(cacheFile, out);
-            res.setHeader('Content-Type', 'image/jpeg');
-            res.setHeader('Cache-Control', 'public, max-age=86400');
-            return res.send(out);
-        } catch (e) {
-            console.error('Probe crop error:', e.message);
-            return res.sendFile(src);
-        }
-    });
-});
-
-// Thumbnail FOTO PERCOBAAN GAGAL (face_attempt_log): kotak MERAH kalau wajah beda (no_match),
-// atau tampil apa adanya kalau tak ada wajah (no_face). Cache di faces-crop.
-router.get('/testing/attempt/:kid/:idx', requireAuth, requireSuperAdmin, async (req, res) => {
-    const sharp = require('sharp');
-    const kid = parseInt(req.params.kid, 10);
-    const idx = parseInt(req.params.idx, 10);
-    if (!kid || Number.isNaN(idx)) return res.status(400).end();
-    let rows;
-    try { rows = await db.query('SELECT data_percobaan_gagal FROM karyawan WHERE id = ?', [kid]); }
-    catch (e) { return res.status(404).end(); }
-    if (!rows || !rows.length) return res.status(404).end();
-    let arr = rows[0].data_percobaan_gagal;
-    if (typeof arr === 'string') { try { arr = JSON.parse(arr || '[]'); } catch (e) { arr = []; } }
-    if (!Array.isArray(arr) || !arr[idx]) return res.status(404).end();
-    const status = arr[idx].status;
-    const photoPath = arr[idx].foto;
-    if (!photoPath) return res.status(404).end();
-    if (/^https?:\/\//.test(photoPath)) return res.redirect(photoPath);
-    const src = [path.join(__dirname, '..', 'public', photoPath), path.join(__dirname, '..', photoPath)]
-        .find(p => fs.existsSync(p));
-    if (!src) return res.status(404).end();
-    const cacheDir = path.join(__dirname, '..', 'public', 'uploads', 'faces-crop');
-    const cacheFile = path.join(cacheDir, 'attempt-' + kid + '-' + idx + '-hd.jpg');
-    try {
-        if (fs.existsSync(cacheFile)) return res.sendFile(cacheFile);
-        if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
-
-        let out = null;
-        if (status === 'no_match') {
-            // Wajah terdeteksi tapi beda orang -> crop wajah + KOTAK MERAH
-            try {
-                const { detectFaces } = require('../utils/face-recognition');
-                const { createCanvas, loadImage } = require('canvas');
-                const faces = await detectFaces(src);
-                if (faces && faces.length && faces[0].box) {
-                    const box = faces[0].box;
-                    const orientedBuf = await sharp(src).rotate().toBuffer();
-                    const img = await loadImage(orientedBuf);
-                    const cx = (box.xMin + box.xMax) / 2, cy = (box.yMin + box.yMax) / 2;
-                    let side = Math.round(Math.max(box.width, box.height) * 1.35);
-                    side = Math.max(1, Math.min(side, img.width, img.height));
-                    const left = Math.max(0, Math.min(Math.round(cx - side / 2), img.width - side));
-                    const top = Math.max(0, Math.min(Math.round(cy - side / 2), img.height - side));
-                    const canvas = createCanvas(side, side);
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, left, top, side, side, 0, 0, side, side);
-                    ctx.strokeStyle = '#ef4444'; // MERAH = tidak cocok / orang lain
-                    ctx.lineWidth = Math.max(3, Math.round(side * 0.012));
-                    ctx.strokeRect(box.xMin - left, box.yMin - top, box.width, box.height);
-                    const drawn = canvas.toBuffer('image/jpeg', { quality: 0.92 });
-                    const target = Math.min(side, 512);
-                    out = await sharp(drawn).resize(target, target, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 92 }).toBuffer();
-                }
-            } catch (e) {
-                console.warn('attempt no_match draw gagal, tampil apa adanya:', e.message);
+            } catch (e) { console.warn('bbox draw gagal:', e.message); }
+            if (!out) {
+                out = await sharp(src).rotate().resize(480, 480, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 90 }).toBuffer();
             }
         }
-        if (!out) {
-            // no_face / fallback: tampilkan APA ADANYA (tanpa kotak)
-            out = await sharp(src).rotate().resize(480, 480, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 90 }).toBuffer();
-        }
-        fs.writeFileSync(cacheFile, out);
-        res.setHeader('Content-Type', 'image/jpeg');
-        res.setHeader('Cache-Control', 'no-store');
-        return res.send(out);
-    } catch (e) {
-        console.error('Attempt crop error:', e.message);
-        return res.sendFile(src);
-    }
-});
 
-// Helper crop wajah + kotak untuk halaman pengujian. boxColor null = tampil apa adanya (tanpa kotak).
-// Cache STABIL (file + header cache lama) supaya gambar tidak "hilang-hilangan".
-async function serveFaceCrop(res, photoPath, cacheKey, boxColor) {
-    const sharp = require('sharp');
-    if (!photoPath) return res.status(404).end();
-    if (/^https?:\/\//.test(photoPath)) return res.redirect(photoPath);
-    const src = [path.join(__dirname, '..', 'public', photoPath), path.join(__dirname, '..', photoPath)]
-        .find(p => fs.existsSync(p));
-    if (!src) return res.status(404).end();
-    const cacheDir = path.join(__dirname, '..', 'public', 'uploads', 'faces-crop');
-    const cacheFile = path.join(cacheDir, cacheKey + '.jpg');
-    try {
-        if (fs.existsSync(cacheFile)) { res.setHeader('Cache-Control', 'public, max-age=86400'); return res.sendFile(cacheFile); }
-        if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
-        let out = null;
-        if (boxColor) {
-            try {
-                const { detectFaces } = require('../utils/face-recognition');
-                const { createCanvas, loadImage } = require('canvas');
-                const faces = await detectFaces(src);
-                if (faces && faces.length && faces[0].box) {
-                    const box = faces[0].box;
-                    const orientedBuf = await sharp(src).rotate().toBuffer();
-                    const img = await loadImage(orientedBuf);
-                    const cx = (box.xMin + box.xMax) / 2, cy = (box.yMin + box.yMax) / 2;
-                    let side = Math.round(Math.max(box.width, box.height) * 1.35);
-                    side = Math.max(1, Math.min(side, img.width, img.height));
-                    const left = Math.max(0, Math.min(Math.round(cx - side / 2), img.width - side));
-                    const top = Math.max(0, Math.min(Math.round(cy - side / 2), img.height - side));
-                    const canvas = createCanvas(side, side);
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, left, top, side, side, 0, 0, side, side);
-                    ctx.strokeStyle = boxColor;
-                    ctx.lineWidth = Math.max(3, Math.round(side * 0.012));
-                    ctx.strokeRect(box.xMin - left, box.yMin - top, box.width, box.height);
-                    const drawn = canvas.toBuffer('image/jpeg', { quality: 0.92 });
-                    const target = Math.min(side, 512);
-                    out = await sharp(drawn).resize(target, target, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 92 }).toBuffer();
-                }
-            } catch (e) { console.warn('face crop draw gagal:', e.message); }
-        }
-        if (!out) {
-            out = await sharp(src).rotate().resize(480, 480, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 90 }).toBuffer();
-        }
         fs.writeFileSync(cacheFile, out);
         res.setHeader('Content-Type', 'image/jpeg');
         res.setHeader('Cache-Control', 'public, max-age=86400');
         return res.send(out);
     } catch (e) {
-        console.error('serveFaceCrop error:', e.message);
+        console.error('servePipelineStage error:', e.message);
         try { return res.sendFile(src); } catch (_) { return res.status(404).end(); }
     }
 }
 
-// Foto SELESAI ISTIRAHAT yang berhasil (kotak hijau)
+// ==================== ROUTE GAMBAR FACE RECOGNITION (THUMBNAIL + PIPELINE) ====================
+// Semua route: GET /admin/testing/probe|attempt|istirahat|reference/:params
+// Support query ?stage=bbox|align|encode|match  untuk visualisasi pipeline
+
+// Foto probe (absen berhasil: check-in / check-out) — id_karyawan cuma di-fetch untuk stage match
+router.get('/testing/probe/:pid/:type', requireAuth, requireSuperAdmin, async (req, res) => {
+    const pid = parseInt(req.params.pid, 10);
+    const type = req.params.type === 'keluar' ? 'keluar' : 'masuk';
+    const stage = req.query.stage || 'bbox';
+    if (!pid) return res.status(400).end();
+    try {
+        let rows;
+        if (stage === 'match') {
+            rows = await db.query('SELECT data_' + type + ' AS d, id_karyawan FROM presensi WHERE id = ?', [pid]);
+        } else {
+            rows = await db.query('SELECT data_' + type + ' AS d FROM presensi WHERE id = ?', [pid]);
+        }
+        if (!rows || !rows.length) return res.status(404).end();
+        let data = {};
+        try { data = typeof rows[0].d === 'string' ? JSON.parse(rows[0].d || '{}') : (rows[0].d || {}); } catch (e) {}
+        const photoPath = data && data.foto;
+        const cacheKey = 'probe-' + pid + '-' + type;
+        let extra = null;
+        if (stage === 'match' && rows[0].id_karyawan) {
+            const refRows = await db.query(
+                'SELECT photo_path FROM karyawan_face_reference WHERE id_karyawan = ? AND is_active = TRUE LIMIT 1',
+                [rows[0].id_karyawan]
+            );
+            extra = {
+                refPhoto: (refRows && refRows.length) ? refRows[0].photo_path : null,
+                similarity: data.face_similarity || null,
+                distance: data.face_similarity != null ? (1 - Number(data.face_similarity)) : null,
+                threshold: (1 - Number(process.env.FACE_MATCH_DISTANCE || '0.6')),
+                isMatch: data.face_similarity != null ? (Number(data.face_similarity) >= (1 - Number(process.env.FACE_MATCH_DISTANCE || '0.6'))) : false
+            };
+        }
+        return servePipelineStage(res, photoPath, cacheKey, stage, extra);
+    } catch (e) {
+        console.error('Probe route error:', e.message);
+        return res.status(404).end();
+    }
+});
+
+// Foto percobaan GAGAL (no_match / no_face / no_image)
+router.get('/testing/attempt/:kid/:idx', requireAuth, requireSuperAdmin, async (req, res) => {
+    const kid = parseInt(req.params.kid, 10);
+    const idx = parseInt(req.params.idx, 10);
+    const stage = req.query.stage || 'bbox';
+    if (!kid || Number.isNaN(idx)) return res.status(400).end();
+    try {
+        const rows = await db.query('SELECT data_percobaan_gagal FROM karyawan WHERE id = ?', [kid]);
+        if (!rows || !rows.length) return res.status(404).end();
+        let arr = rows[0].data_percobaan_gagal;
+        if (typeof arr === 'string') { try { arr = JSON.parse(arr || '[]'); } catch (e) { arr = []; } }
+        if (!Array.isArray(arr) || !arr[idx]) return res.status(404).end();
+        const photoPath = arr[idx].foto;
+        const cacheKey = 'attempt-' + kid + '-' + idx;
+        let extra = null;
+        if (stage === 'match') {
+            const refRows = await db.query(
+                'SELECT photo_path FROM karyawan_face_reference WHERE id_karyawan = ? AND is_active = TRUE LIMIT 1',
+                [kid]
+            );
+            const similarity = arr[idx].similarity;
+            extra = {
+                refPhoto: (refRows && refRows.length) ? refRows[0].photo_path : null,
+                similarity: similarity || null,
+                distance: similarity != null ? (1 - Number(similarity)) : null,
+                threshold: (1 - Number(process.env.FACE_MATCH_DISTANCE || '0.6')),
+                isMatch: false // attempt route = selalu gagal
+            };
+        }
+        return servePipelineStage(res, photoPath, cacheKey, stage, extra);
+    } catch (e) {
+        console.error('Attempt route error:', e.message);
+        return res.status(404).end();
+    }
+});
+
+// Foto selesai istirahat yang berhasil
 router.get('/testing/istirahat/:pid/:sidx', requireAuth, requireSuperAdmin, async (req, res) => {
     const pid = parseInt(req.params.pid, 10);
     const sidx = parseInt(req.params.sidx, 10);
+    const stage = req.query.stage || 'bbox';
     if (!pid || Number.isNaN(sidx)) return res.status(400).end();
-    let rows;
-    try { rows = await db.query('SELECT data_masuk FROM presensi WHERE id = ?', [pid]); }
-    catch (e) { return res.status(404).end(); }
-    if (!rows || !rows.length) return res.status(404).end();
-    let dm = rows[0].data_masuk;
-    if (typeof dm === 'string') { try { dm = JSON.parse(dm || '{}'); } catch (e) { dm = {}; } }
-    const sesi = (dm && dm.istirahat && Array.isArray(dm.istirahat.sesi)) ? dm.istirahat.sesi : [];
-    const photoPath = sesi[sidx] && sesi[sidx].foto;
-    return serveFaceCrop(res, photoPath, 'break-' + pid + '-' + sidx, '#22c55e');
+    try {
+        const rows = await db.query('SELECT data_masuk FROM presensi WHERE id = ?', [pid]);
+        if (!rows || !rows.length) return res.status(404).end();
+        let dm = rows[0].data_masuk;
+        if (typeof dm === 'string') { try { dm = JSON.parse(dm || '{}'); } catch (e) { dm = {}; } }
+        const sesi = (dm && dm.istirahat && Array.isArray(dm.istirahat.sesi)) ? dm.istirahat.sesi : [];
+        const photoPath = sesi[sidx] && sesi[sidx].foto;
+        const cacheKey = 'break-' + pid + '-' + sidx;
+        let extra = null;
+        if (stage === 'match') {
+            const presensiRows = await db.query('SELECT id_karyawan FROM presensi WHERE id = ?', [pid]);
+            if (presensiRows && presensiRows.length) {
+                const refRows = await db.query(
+                    'SELECT photo_path FROM karyawan_face_reference WHERE id_karyawan = ? AND is_active = TRUE LIMIT 1',
+                    [presensiRows[0].id_karyawan]
+                );
+                const sim = sesi[sidx] && sesi[sidx].face_similarity;
+                extra = {
+                    refPhoto: (refRows && refRows.length) ? refRows[0].photo_path : null,
+                    similarity: sim || null,
+                    distance: sim != null ? (1 - Number(sim)) : null,
+                    threshold: (1 - Number(process.env.FACE_MATCH_DISTANCE || '0.6')),
+                    isMatch: sim != null ? (Number(sim) >= (1 - Number(process.env.FACE_MATCH_DISTANCE || '0.6'))) : false
+                };
+            }
+        }
+        return servePipelineStage(res, photoPath, cacheKey, stage, extra);
+    } catch (e) {
+        console.error('Istirahat route error:', e.message);
+        return res.status(404).end();
+    }
 });
 
-// Foto WAJAH REFERENSI (enrollment) — tab Referensi (kotak hijau)
+// Foto wajah referensi (enrollment)
 router.get('/testing/reference/:rid', requireAuth, requireSuperAdmin, async (req, res) => {
     const rid = parseInt(req.params.rid, 10);
+    const stage = req.query.stage || 'bbox';
     if (!rid) return res.status(400).end();
-    let rows;
-    try { rows = await db.query('SELECT photo_path FROM karyawan_face_reference WHERE id = ?', [rid]); }
-    catch (e) { return res.status(404).end(); }
-    if (!rows || !rows.length) return res.status(404).end();
-    return serveFaceCrop(res, rows[0].photo_path, 'ref-' + rid, '#22c55e');
+    try {
+        const rows = await db.query('SELECT photo_path FROM karyawan_face_reference WHERE id = ?', [rid]);
+        if (!rows || !rows.length) return res.status(404).end();
+        return servePipelineStage(res, rows[0].photo_path, 'ref-' + rid, stage, null);
+    } catch (e) {
+        console.error('Reference route error:', e.message);
+        return res.status(404).end();
+    }
 });
 
 module.exports = router;

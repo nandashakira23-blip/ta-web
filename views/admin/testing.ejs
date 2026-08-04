@@ -14,7 +14,8 @@
         th, td { border: 1px solid #444; padding: 6px 8px; text-align: left; vertical-align: middle; }
         th { background: #f0f0f0; font-weight: bold; text-align: center; }
         td.c { text-align: center; }
-        img.thumb { width: 110px; height: 110px; object-fit: cover; border-radius: 6px; background: #eee; display: block; margin: 0 auto; cursor: zoom-in; }
+        img.thumb { width: 110px; height: 110px; object-fit: cover; border-radius: 6px; background: #eee; display: block; margin: 0 auto; cursor: pointer; transition: transform .15s; }
+        img.thumb:hover { transform: scale(1.08); }
         .nofoto { color: #999; font-size: 12px; font-style: italic; }
         .badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; border: 1px solid #bbb; white-space: nowrap; }
         .badge.on { background: #e6f4ea; color: #0a7d2c; border-color: #a6d8b5; }
@@ -35,6 +36,19 @@
         .toolbar button.primary { background: #2b6cb0; color: #fff; border-color: #2b6cb0; }
         .toolbar button.danger { background: #b00020; color: #fff; border-color: #b00020; }
         .empty { padding: 40px; text-align: center; color: #666; border: 1px dashed #bbb; border-radius: 10px; }
+        .pip-hint { font-size: 10px; color: #888; text-align: center; margin-top: 2px; }
+        /* Modal pipeline */
+        .pip-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:9999; align-items:center; justify-content:center; }
+        .pip-overlay.show { display:flex; }
+        .pip-box { background:#fff; border-radius:12px; max-width:90vw; max-height:90vh; overflow:auto; padding:16px; box-shadow:0 8px 36px rgba(0,0,0,.4); }
+        .pip-close { float:right; background:none; border:none; font-size:22px; cursor:pointer; color:#666; padding:0 4px; line-height:1; }
+        .pip-title { font-size:15px; font-weight:bold; margin-bottom:10px; }
+        .pip-tabs { display:flex; gap:4px; margin-bottom:12px; flex-wrap:wrap; }
+        .pip-tab { font:inherit; font-size:13px; padding:6px 14px; border:1px solid #ccc; border-radius:6px; background:#f7f7f7; cursor:pointer; }
+        .pip-tab.sel { background:#2b6cb0; color:#fff; border-color:#2b6cb0; }
+        .pip-img { text-align:center; min-height:200px; display:flex; align-items:center; justify-content:center; }
+        .pip-img img { max-width:100%; max-height:65vh; border-radius:8px; box-shadow:0 2px 12px rgba(0,0,0,.15); }
+        .pip-loading { color:#888; font-size:14px; }
         @media print { .no-print { display: none !important; } body { padding: 0; } .toolbar, .tabs { display: none; } }
     </style>
 </head>
@@ -134,7 +148,8 @@
                 <td class="c"><span class="badge <%= jenisKey %>"><%= e.jenisLabel %></span></td>
                 <td class="c">
                     <% if (fotoUrl) { %>
-                        <a href="<%= fotoUrl %>" target="_blank"><img class="thumb" loading="lazy" src="<%= fotoUrl %>" alt="foto" onerror="this.style.opacity=.2;this.alt='(foto tidak ada)';"></a>
+                        <a href="#" onclick="openPipeline('<%= fotoUrl %>', '<%= e.nama || r.nama %>', event)" style="display:block;"><img class="thumb" loading="lazy" src="<%= fotoUrl %>" alt="foto" onerror="this.style.opacity=.2;this.alt='(foto tidak ada)';"></a>
+                        <div class="pip-hint">klik untuk lihat pipeline</div>
                     <% } else { %>
                         <span class="nofoto">(tidak ada gambar)</span>
                     <% } %>
@@ -176,12 +191,27 @@
                     <td><%= r.nik %></td>
                     <td class="c"><%= r.method %></td>
                     <td class="c"><%= r.dibuat %></td>
-                    <td class="c"><a href="<%= url %>" target="_blank"><img class="thumb" loading="lazy" src="<%= url %>" alt="referensi" onerror="this.style.opacity=.2;this.alt='(foto tidak ada)';"></a></td>
+                    <td class="c"><a href="#" onclick="openPipeline('<%= url %>', '<%= r.nama %>', event)" style="display:block;"><img class="thumb" loading="lazy" src="<%= url %>" alt="referensi" onerror="this.style.opacity=.2;this.alt='(foto tidak ada)';"></a><div class="pip-hint">klik untuk lihat pipeline</div></td>
                 </tr>
                 <% }) %>
             </tbody>
         </table>
     <% } %>
+    </div>
+</div>
+
+<!-- ================= MODAL PIPELINE FACE RECOGNITION ================= -->
+<div id="pipOverlay" class="pip-overlay no-print" onclick="if(event.target===this)closePipeline()">
+    <div class="pip-box">
+        <button class="pip-close" onclick="closePipeline()">&times;</button>
+        <div class="pip-title" id="pipTitle">Pipeline Face Recognition</div>
+        <div class="pip-tabs">
+            <button class="pip-tab sel" data-stage="bbox" onclick="switchStage('bbox')">Bounding Box</button>
+            <button class="pip-tab" data-stage="align" onclick="switchStage('align')">Face Alignment</button>
+            <button class="pip-tab" data-stage="encode" onclick="switchStage('encode')">Encoding 128-d</button>
+            <button class="pip-tab" data-stage="match" onclick="switchStage('match')">Pencocokan</button>
+        </div>
+        <div class="pip-img" id="pipImg"><span class="pip-loading">Memuat...</span></div>
     </div>
 </div>
 
@@ -315,6 +345,45 @@
             visibleRows().forEach(function (tr) { tr.querySelector('.rowchk').checked = ca.checked; });
         });
     }
+    
+    // ========== PIPELINE MODAL ==========
+    var pipUrl = '';
+    function openPipeline(url, nama, ev) {
+        if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+        pipUrl = url;
+        document.getElementById('pipTitle').textContent = 'Pipeline: ' + (nama || 'Wajah');
+        document.getElementById('pipOverlay').classList.add('show');
+        switchStage('bbox'); // default: bounding box
+    }
+    function closePipeline() {
+        document.getElementById('pipOverlay').classList.remove('show');
+    }
+    function switchStage(stage) {
+        // Update tab aktif
+        document.querySelectorAll('.pip-tab').forEach(function(t) {
+            t.classList.toggle('sel', t.dataset.stage === stage);
+        });
+        // Load gambar
+        var imgDiv = document.getElementById('pipImg');
+        imgDiv.innerHTML = '<span class="pip-loading">Memuat tahap ' + stage + '...</span>';
+        var sep = pipUrl.indexOf('?') === -1 ? '?' : '&';
+        var stageUrl = pipUrl + sep + 'stage=' + stage + '&t=' + Date.now();
+        var img = new Image();
+        img.onload = function() {
+            imgDiv.innerHTML = '';
+            imgDiv.appendChild(img);
+        };
+        img.onerror = function() {
+            imgDiv.innerHTML = '<span style="color:#b00020;font-size:14px">Gagal memuat gambar untuk tahap <b>' + stage + '</b>. Pastikan foto tersedia dan wajah terdeteksi.</span>';
+        };
+        img.src = stageUrl;
+        img.style.maxWidth = '100%';
+        img.style.maxHeight = '65vh';
+        img.style.borderRadius = '8px';
+        img.style.boxShadow = '0 2px 12px rgba(0,0,0,.15)';
+    }
+    // Escape key to close
+    document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closePipeline(); });
 </script>
 </body>
 </html>
