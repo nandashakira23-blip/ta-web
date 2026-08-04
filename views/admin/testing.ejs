@@ -357,6 +357,11 @@
     }
     function closePipeline() {
         document.getElementById('pipOverlay').classList.remove('show');
+        document.getElementById('pipImg').innerHTML = '<span class="pip-loading">Memuat...</span>';
+        // Reset tab aktif ke bbox
+        document.querySelectorAll('.pip-tab').forEach(function(t) {
+            t.classList.toggle('sel', t.dataset.stage === 'bbox');
+        });
     }
     function switchStage(stage) {
         // Update tab aktif
