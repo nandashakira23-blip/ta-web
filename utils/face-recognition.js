@@ -401,13 +401,13 @@ async function generateEncodingDiagram(imagePath, descriptor) {
   const positions = detections && detections.landmarks ? detections.landmarks.positions : null;
 
   // ── Layout ──
-  const faceSz = 200;
+  const faceSz = 240;
   const pad = 20;
   const arrowW = 50;
   const leftW = pad + faceSz + pad;       // kolom kiri: foto
-  const rightW = 520;                      // kolom kanan: teks encoding
+  const rightW = 540;                      // kolom kanan: teks encoding
   const totalW = leftW + arrowW + rightW + pad;
-  const blockH = Math.max(faceSz, 340) + pad * 2;
+  const blockH = faceSz + pad * 2 + 50;
   const totalH = blockH + pad + 30;
 
   const cv = createCanvas(totalW, totalH);
@@ -446,9 +446,9 @@ async function generateEncodingDiagram(imagePath, descriptor) {
     tctx.drawImage(img, sx, sy, sw, sh, 0, 0, faceSz, faceSz);
     const scale = faceSz / side;
 
-    // Bounding box hijau
+    // Bounding box hijau (tebal, jelas terlihat)
     tctx.strokeStyle = '#22c55e';
-    tctx.lineWidth = Math.max(2.5, Math.round(faceSz * 0.015));
+    tctx.lineWidth = Math.max(3, Math.round(faceSz * 0.02));
     tctx.strokeRect((box.x - sx) * scale, (box.y - sy) * scale, box.width * scale, box.height * scale);
 
     // Landmarks
@@ -488,10 +488,12 @@ async function generateEncodingDiagram(imagePath, descriptor) {
   ctx.drawImage(faceImg, lx + (leftW - faceSz) / 2, ly + 34, faceSz, faceSz);
 
   // Label bawah foto
-  ctx.fillStyle = '#666';
-  ctx.font = '10px sans-serif';
+  ctx.fillStyle = '#444';
+  ctx.font = 'bold 10px sans-serif';
   ctx.fillText('Bounding Box + 68 Landmark', lx + leftW / 2, ly + 34 + faceSz + 12);
-  ctx.fillText('(Deteksi & Alignment)', lx + leftW / 2, ly + 34 + faceSz + 26);
+  ctx.font = '9px sans-serif';
+  ctx.fillStyle = '#666';
+  ctx.fillText('(Hasil Deteksi & Alignment)', lx + leftW / 2, ly + 34 + faceSz + 26);
 
   // ── PANAH ──
   const ax = lx + leftW, ay = ly + blockH / 2;
