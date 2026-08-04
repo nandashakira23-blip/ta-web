@@ -3946,7 +3946,8 @@ async function servePipelineStage(res, photoPath, cacheKeyBase, stage, extra) {
     const cacheDir = path.join(__dirname, '..', 'public', 'uploads', 'faces-crop');
     const cacheFile = path.join(cacheDir, cacheKeyBase + '-' + (stage || 'thumb') + '.jpg');
     try {
-        if (fs.existsSync(cacheFile)) {
+        // Thumbnail (no stage): pakai cache. Pipeline stage: regenerate selalu.
+        if (!stage && fs.existsSync(cacheFile)) {
             res.setHeader('Cache-Control', 'public, max-age=86400');
             return res.sendFile(cacheFile);
         }
@@ -4097,9 +4098,9 @@ async function servePipelineStage(res, photoPath, cacheKeyBase, stage, extra) {
             }
         }
 
-        fs.writeFileSync(cacheFile, out);
+        if (!stage) fs.writeFileSync(cacheFile, out); // cache hanya untuk thumbnail
         res.setHeader('Content-Type', 'image/jpeg');
-        res.setHeader('Cache-Control', 'public, max-age=86400');
+        res.setHeader('Cache-Control', stage ? 'no-store' : 'public, max-age=86400');
         return res.send(out);
     } catch (e) {
         console.error('servePipelineStage error:', e.message);
