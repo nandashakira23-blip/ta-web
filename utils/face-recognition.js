@@ -578,6 +578,23 @@ function drawArrow(ctx, x1, y1, x2, y2, color, width) {
   ctx.fill();
 }
 
+/**
+ * Deteksi wajah + landmark (tanpa descriptor, lebih ringan).
+ * Return box + positions untuk drawing.
+ */
+async function detectFaceWithLandmarks(imagePath) {
+  await initialize();
+  const img = await loadOrientedImage(imagePath);
+  const detection = await faceapi
+    .detectSingleFace(img, new faceapi.SsdMobilenetv1Options({ minConfidence: DETECTION_MIN_CONFIDENCE }))
+    .withFaceLandmarks();
+  if (!detection) return null;
+  return {
+    box: detection.detection.box,
+    positions: detection.landmarks ? detection.landmarks.positions : null
+  };
+}
+
 module.exports = {
   detectFaces,
   getProbeFaces,
@@ -585,6 +602,7 @@ module.exports = {
   drawFaceLandmarks,
   generateEncodingDiagram,
   generateEncodingChart: generateEncodingDiagram,
+  detectFaceWithLandmarks,
   initialize,
   initializeDetector
 };

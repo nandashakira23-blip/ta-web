@@ -3970,71 +3970,68 @@ async function servePipelineStage(res, photoPath, cacheKeyBase, stage, extra) {
             const descriptor = (faces && faces.length > 0) ? faces[0].descriptor : null;
             out = await generateEncodingDiagram(src, descriptor);
         } else if (stage === 'match' && extra) {
-            // Pencocokan wajah: side-by-side probe vs referensi (probe + bounding box)
+            // Pencocokan wajah: side-by-side probe vs referensi (bbox + landmark di kedua sisi)
             const refPath = [path.join(__dirname, '..', 'public', extra.refPhoto), path.join(__dirname, '..', extra.refPhoto)]
                 .find(p => fs.existsSync(p));
             const { createCanvas, loadImage } = require('canvas');
-            // Probe: deteksi wajah → crop + bounding box (sama seperti stage bbox)
-            let probeImg;
-            try {
-                const { detectFaces } = require('../utils/face-recognition');
-                const faces = await detectFaces(src);
-                if (faces && faces.length > 0 && faces[0].box) {
-                    const box = faces[0].box;
-                    const orientedBuf = await sharp(src).rotate().toBuffer();
-                    const img = await loadImage(orientedBuf);
-                    const fcx = (box.xMin + box.xMax) / 2, fcy = (box.yMin + box.yMax) / 2;
-                    let side = Math.round(Math.max(box.width, box.height) * 1.35);
-                    side = Math.max(1, Math.min(side, img.width, img.height));
-                    const left = Math.max(0, Math.min(Math.round(fcx - side / 2), img.width - side));
-                    const top = Math.max(0, Math.min(Math.round(fcy - side / 2), img.height - side));
-                    const tmpCanvas = createCanvas(side, side);
-                    const tmpCtx = tmpCanvas.getContext('2d');
-                    tmpCtx.drawImage(img, left, top, side, side, 0, 0, side, side);
-                    tmpCtx.strokeStyle = extra.isMatch ? '#22c55e' : '#ef4444';
-                    tmpCtx.lineWidth = Math.max(3, Math.round(side * 0.012));
-                    tmpCtx.strokeRect(box.xMin - left, box.yMin - top, box.width, box.height);
-                    const drawn = tmpCanvas.toBuffer('image/jpeg', { quality: 0.92 });
-                    const probeBuf = await sharp(drawn).resize(360, 360, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 90 }).toBuffer();
-                    probeImg = await loadImage(probeBuf);
-                } else {
-                    throw new Error('no face');
+            const { detectFaceWithLandmarks } = require('../utils/face-recognition');
+
+            // Helper: crop face + bbox + landmarks → buffer 360x360
+            async function makeMatchFace(imagePath, boxColor) {
+                const det = await detectFaceWithLandmarks(imagePath);
+                if (!det || !det.box) {
+                    const buf = await sharp(imagePath).rotate().resize(360, 360, { fit: 'cover', position: 'attention' }).jpeg({ quality: 90 }).toBuffer();
+                    return loadImage(buf);
                 }
-            } catch (e) {
-                const probeBuf = await sharp(src).rotate().resize(360, 360, { fit: 'cover', position: 'attention' }).jpeg({ quality: 90 }).toBuffer();
-                probeImg = await loadImage(probeBuf);
-            }
-            // Referensi: crop + bounding box juga
-            let refImg = null;
-            if (refPath) {
-                try {
-                    const { detectFaces } = require('../utils/face-recognition');
-                    const faces = await detectFaces(refPath);
-                    if (faces && faces.length > 0 && faces[0].box) {
-                        const box = faces[0].box;
-                        const orientedBuf = await sharp(refPath).rotate().toBuffer();
-                        const img = await loadImage(orientedBuf);
-                        const fcx = (box.xMin + box.xMax) / 2, fcy = (box.yMin + box.yMax) / 2;
-                        let side = Math.round(Math.max(box.width, box.height) * 1.35);
-                        side = Math.max(1, Math.min(side, img.width, img.height));
-                        const left = Math.max(0, Math.min(Math.round(fcx - side / 2), img.width - side));
-                        const top = Math.max(0, Math.min(Math.round(fcy - side / 2), img.height - side));
-                        const tmpCanvas = createCanvas(side, side);
-                        const tmpCtx = tmpCanvas.getContext('2d');
-                        tmpCtx.drawImage(img, left, top, side, side, 0, 0, side, side);
-                        tmpCtx.strokeStyle = '#22c55e';
-                        tmpCtx.lineWidth = Math.max(3, Math.round(side * 0.012));
-                        tmpCtx.strokeRect(box.xMin - left, box.yMin - top, box.width, box.height);
-                        const drawn = tmpCanvas.toBuffer('image/jpeg', { quality: 0.92 });
-                        const refBuf = await sharp(drawn).resize(360, 360, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 90 }).toBuffer();
-                        refImg = await loadImage(refBuf);
+                const box = det.box;
+                const positions = det.positions;
+                const orientedBuf = await sharp(imagePath).rotate().toBuffer();
+                const img = await loadImage(orientedBuf);
+                const fcx = (box.x + box.width / 2), fcy = (box.y + box.height / 2);
+                let side = Math.round(Math.max(box.width, box.height) * 1.35);
+                side = Math.max(1, Math.min(side, img.width, img.height));
+                const left = Math.max(0, Math.min(Math.round(fcx - side / 2), img.width - side));
+                const top = Math.max(0, Math.min(Math.round(fcy - side / 2), img.height - side));
+                const scale = 360 / side;
+                const tmpCanvas = createCanvas(360, 360);
+                const tmpCtx = tmpCanvas.getContext('2d');
+                tmpCtx.drawImage(img, left, top, side, side, 0, 0, 360, 360);
+
+                // Bounding box
+                tmpCtx.strokeStyle = boxColor;
+                tmpCtx.lineWidth = Math.max(2.5, Math.round(360 * 0.012));
+                tmpCtx.strokeRect((box.x - left) * scale, (box.y - top) * scale, box.width * scale, box.height * scale);
+
+                // Landmarks
+                if (positions) {
+                    const lw = Math.max(0.6, 360 * 0.0015);
+                    function lx(px) { return (px - left) * scale; }
+                    function ly(py) { return (py - top) * scale; }
+                    function poly(indices, color, w) {
+                        tmpCtx.beginPath(); tmpCtx.strokeStyle = color; tmpCtx.lineWidth = w || lw;
+                        for (let i = 0; i < indices.length; i++) {
+                            const p = positions[indices[i]]; if (!p) continue;
+                            if (i === 0) tmpCtx.moveTo(lx(p.x), ly(p.y)); else tmpCtx.lineTo(lx(p.x), ly(p.y));
+                        }
+                        tmpCtx.stroke();
                     }
-                } catch (e) { /* fallback: no bbox on ref */ }
-                if (!refImg) {
-                    const refBuf = await sharp(refPath).rotate().resize(360, 360, { fit: 'cover', position: 'attention' }).jpeg({ quality: 90 }).toBuffer();
-                    refImg = await loadImage(refBuf);
+                    poly([...Array(17).keys()], '#f97316', lw * 1.3);
+                    poly([17,18,19,20,21], '#eab308', lw);
+                    poly([22,23,24,25,26], '#eab308', lw);
+                    poly([27,28,29,30], '#a855f7', lw);
+                    poly([31,32,33,34,35], '#a855f7', lw);
+                    poly([36,37,38,39,40,41,36], '#3b82f6', lw);
+                    poly([42,43,44,45,46,47,42], '#3b82f6', lw);
+                    poly([48,49,50,51,52,53,54,55,56,57,58,59,48], '#ef4444', lw * 1.2);
+                    poly([60,61,62,63,64,65,66,67,60], '#ef4444', lw * 0.7);
                 }
+                const drawn = tmpCanvas.toBuffer('image/jpeg', { quality: 0.92 });
+                return loadImage(drawn);
             }
+
+            const probeImg = await makeMatchFace(src, extra.isMatch ? '#22c55e' : '#ef4444');
+            let refImg = null;
+            if (refPath) refImg = await makeMatchFace(refPath, '#22c55e');
             const gap = 24;
             const labelH = 60;
             const w = 360 + (refImg ? gap + 360 : 0);
@@ -4047,11 +4044,11 @@ async function servePipelineStage(res, photoPath, cacheKeyBase, stage, extra) {
             ctx.fillStyle = '#1a56b0';
             ctx.font = 'bold 14px sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText('Foto Probe (Absen)', 180, 378);
+            ctx.fillText('Probe (bbox + landmark)', 180, 378);
             if (refImg) {
                 ctx.drawImage(refImg, 360 + gap, 0, 360, 360);
                 ctx.fillStyle = '#0a7d2c';
-                ctx.fillText('Foto Referensi (Enrollment)', 360 + gap + 180, 378);
+                ctx.fillText('Referensi (bbox + landmark)', 360 + gap + 180, 378);
             }
             // Skor kemiripan + jarak
             const infoY = refImg ? 405 : 395;
