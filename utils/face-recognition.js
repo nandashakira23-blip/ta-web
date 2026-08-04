@@ -467,21 +467,21 @@ async function generateEncodingDiagram(imagePath, descriptor) {
   // Nama-nama dimensi contoh
   ctx.fillStyle = '#555';
   ctx.font = '10px sans-serif';
-  ctx.fillText('Contoh nilai embedding:', rx + 14, ry + 48);
+  ctx.fillText('Contoh 12 dari 128 nilai embedding:', rx + 14, ry + 48);
 
-  // Nilai encoding (hanya 6 contoh)
+  // Nilai encoding (12 contoh, 2 baris)
   ctx.fillStyle = '#222';
-  ctx.font = 'bold 14px "Courier New", monospace';
+  ctx.font = 'bold 12px "Courier New", monospace';
   ctx.textAlign = 'left';
   if (Array.isArray(descriptor) && descriptor.length === 128) {
-    const samples = descriptor.slice(0, 6);
-    const text = samples.map(v => (v >= 0 ? ' ' : '') + v.toFixed(5)).join('  ');
-    ctx.fillText(text, rx + 14, ry + 74);
+    const row1 = descriptor.slice(0, 6).map(v => (v >= 0 ? ' ' : '') + v.toFixed(5)).join('  ');
+    const row2 = descriptor.slice(6, 12).map(v => (v >= 0 ? ' ' : '') + v.toFixed(5)).join('  ');
+    ctx.fillText(row1, rx + 14, ry + 72);
+    ctx.fillText(row2, rx + 14, ry + 92);
   }
   ctx.fillStyle = '#888';
   ctx.font = '11px "Courier New", monospace';
-  ctx.fillText('...', rx + 14, ry + 96);
-  ctx.fillText('(total 128 dimensi)', rx + 14, ry + 114);
+  ctx.fillText('...  (total 128 dimensi)', rx + 14, ry + 114);
 
   // Heatmap kecil di bawah
   const cell = 6, gap = 1, cols = 32, rows = 4;
