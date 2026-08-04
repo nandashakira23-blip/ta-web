@@ -480,8 +480,8 @@ async function generateEncodingDiagram(imagePath, descriptor) {
     ctx.fillText(row2, rx + 14, ry + 92);
   }
   ctx.fillStyle = '#888';
-  ctx.font = '11px "Courier New", monospace';
-  ctx.fillText('...  (total 128 dimensi)', rx + 14, ry + 114);
+  ctx.font = 'bold 11px sans-serif';
+  ctx.fillText('...  (total 128 nilai, hanya 12 ditampilkan)', rx + 14, ry + 114);
 
   // Heatmap kecil di bawah
   const cell = 6, gap = 1, cols = 32, rows = 4;
