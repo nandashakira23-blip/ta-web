@@ -3955,8 +3955,9 @@ async function servePipelineStage(res, photoPath, cacheKeyBase, stage, extra) {
         let out = null;
 
         if (!stage) {
-            // Thumbnail ringan: resize saja, TANPA face detection (hemat CPU/RAM)
-            out = await sharp(src).rotate().resize(220, 220, { fit: 'cover', position: 'attention' }).jpeg({ quality: 80 }).toBuffer();
+            // Thumbnail mentah: kirim file asli TANPA proses apa pun (hemat CPU/RAM)
+            res.setHeader('Cache-Control', 'public, max-age=86400');
+            return res.sendFile(src);
         } else if (stage === 'align') {
             const { drawFaceLandmarks } = require('../utils/face-recognition');
             out = await drawFaceLandmarks(src);
