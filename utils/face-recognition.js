@@ -266,24 +266,24 @@ async function getProbeFaces(imagePath, options = {}) {
 }
 
 /**
- * Gambar 68 titik landmark wajah (mata, hidung, mulut, kontur) di atas gambar.
+ * Gambar 68 titik landmark wajah + bounding box di atas crop wajah.
+ * Menunjukkan progression: deteksi (bounding box) → alignment (landmark).
  * Dipakai untuk visualisasi "Face Alignment" di halaman pengujian.
  * @param {string} imagePath path file gambar
- * @returns {Promise<Buffer>} buffer JPEG hasil overlay landmark
+ * @returns {Promise<Buffer>} buffer JPEG hasil overlay landmark + bounding box
  */
 async function drawFaceLandmarks(imagePath) {
   await initialize();
   const img = await loadOrientedImage(imagePath);
-  const canvas = createCanvas(img.width, img.height);
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(img, 0, 0);
 
   const detections = await faceapi
     .detectSingleFace(img, new faceapi.SsdMobilenetv1Options({ minConfidence: DETECTION_MIN_CONFIDENCE }))
     .withFaceLandmarks();
 
   if (!detections || !detections.landmarks) {
-    // Fallback: gambar apa adanya + teks "tidak terdeteksi"
+    const canvas = createCanvas(img.width, img.height);
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
     ctx.fillStyle = 'rgba(239,68,68,0.8)';
     ctx.font = `${Math.max(16, Math.round(img.width * 0.035))}px sans-serif`;
     ctx.textAlign = 'center';
@@ -291,28 +291,45 @@ async function drawFaceLandmarks(imagePath) {
     return canvas.toBuffer('image/jpeg', { quality: 0.92 });
   }
 
+  const box = detections.detection.box;
   const { positions } = detections.landmarks;
-  // 68 titik landmark face-api: 0-16 kontur rahang, 17-21 alis kanan, 22-26 alis kiri,
-  // 27-30 hidung bridge, 31-35 hidung bawah, 36-41 mata kanan, 42-47 mata kiri,
-  // 48-59 bibir luar, 60-67 bibir dalam
-  const dotRadius = Math.max(2, Math.round(img.width * 0.004));
-  const lineWidth = Math.max(1, Math.round(img.width * 0.0015));
 
-  // Gambar titik landmark
+  // Crop persegi rapat ke wajah (sama seperti stage bbox) — semua koordinat relatif ke crop
+  const cx = (box.x + box.width / 2), cy = (box.y + box.height / 2);
+  let side = Math.round(Math.max(box.width, box.height) * 1.35);
+  side = Math.max(1, Math.min(side, img.width, img.height));
+  const left = Math.max(0, Math.min(Math.round(cx - side / 2), img.width - side));
+  const top = Math.max(0, Math.min(Math.round(cy - side / 2), img.height - side));
+  const offsetX = -left, offsetY = -top;
+
+  const canvas = createCanvas(side, side);
+  const ctx = canvas.getContext('2d');
+  // Gambar crop wajah
+  ctx.drawImage(img, left, top, side, side, 0, 0, side, side);
+
+  // ── BOUNDING BOX (hijau, sama seperti stage bbox) ──
+  ctx.strokeStyle = '#22c55e';
+  ctx.lineWidth = Math.max(3, Math.round(side * 0.012));
+  ctx.strokeRect(box.x + offsetX, box.y + offsetY, box.width, box.height);
+
+  // ── 68 TITIK LANDMARK + GARIS KONTUR ──
+  const dotRadius = Math.max(2, Math.round(side * 0.006));
+  const lineWidth = Math.max(1, Math.round(side * 0.002));
+
+  // Gambar titik landmark (koordinat disesuaikan ke crop)
   positions.forEach((pt, i) => {
+    const px = pt.x + offsetX, py = pt.y + offsetY;
     ctx.beginPath();
-    ctx.arc(pt.x, pt.y, dotRadius, 0, 2 * Math.PI);
-    ctx.fillStyle = '#3b82f6'; // biru
+    ctx.arc(px, py, dotRadius, 0, 2 * Math.PI);
+    ctx.fillStyle = '#3b82f6';
     ctx.fill();
-    // Label nomor titik di landmark utama (kelipatan 5 + titik kunci)
     if (i % 5 === 0 || [0, 16, 21, 22, 26, 27, 30, 35, 36, 41, 42, 47, 48, 59, 67].includes(i)) {
       ctx.fillStyle = '#fff';
-      ctx.font = `${Math.max(8, Math.round(img.width * 0.018))}px monospace`;
-      ctx.fillText(i, pt.x + dotRadius + 2, pt.y - dotRadius);
+      ctx.font = `${Math.max(7, Math.round(side * 0.024))}px monospace`;
+      ctx.fillText(i, px + dotRadius + 2, py - dotRadius);
     }
   });
 
-  // Gambar garis kontur
   function drawPolyline(indices, color, width) {
     ctx.beginPath();
     ctx.strokeStyle = color;
@@ -320,49 +337,45 @@ async function drawFaceLandmarks(imagePath) {
     for (let i = 0; i < indices.length; i++) {
       const pt = positions[indices[i]];
       if (!pt) continue;
-      if (i === 0) ctx.moveTo(pt.x, pt.y);
-      else ctx.lineTo(pt.x, pt.y);
+      const px = pt.x + offsetX, py = pt.y + offsetY;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
     }
     ctx.stroke();
   }
 
-  // Kontur rahang (oranye)
   drawPolyline([...Array(17).keys()], '#f97316', lineWidth * 1.5);
-  // Alis kanan + kiri (kuning)
   drawPolyline([17, 18, 19, 20, 21], '#eab308', lineWidth);
   drawPolyline([22, 23, 24, 25, 26], '#eab308', lineWidth);
-  // Hidung bridge + bawah (ungu)
   drawPolyline([27, 28, 29, 30], '#a855f7', lineWidth);
   drawPolyline([31, 32, 33, 34, 35], '#a855f7', lineWidth);
-  // Mata kanan + kiri (hijau)
   drawPolyline([36, 37, 38, 39, 40, 41, 36], '#22c55e', lineWidth);
   drawPolyline([42, 43, 44, 45, 46, 47, 42], '#22c55e', lineWidth);
-  // Bibir luar + dalam (merah)
   drawPolyline([48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 48], '#ef4444', lineWidth * 1.3);
   drawPolyline([60, 61, 62, 63, 64, 65, 66, 67, 60], '#ef4444', lineWidth * 0.8);
 
   // Legend
-  const legendY = img.height - 16;
-  const legendFont = `${Math.max(10, Math.round(img.width * 0.022))}px sans-serif`;
+  const legendY = side - 14;
+  const legendFont = `${Math.max(9, Math.round(side * 0.028))}px sans-serif`;
   const items = [
+    { color: '#22c55e', label: 'Box' },
     { color: '#f97316', label: 'Rahang' },
     { color: '#eab308', label: 'Alis' },
     { color: '#a855f7', label: 'Hidung' },
-    { color: '#22c55e', label: 'Mata' },
-    { color: '#ef4444', label: 'Bibir' }
+    { color: '#3b82f6', label: 'Mata/Bibir' }
   ];
   ctx.font = legendFont;
   ctx.textAlign = 'left';
-  let lx = 8;
+  let lx = 6;
   items.forEach(({ color, label }) => {
-    const tw = ctx.measureText(label).width + 18;
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    ctx.fillRect(lx, legendY - 14, tw, 20);
+    const tw = ctx.measureText(label).width + 16;
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(lx, legendY - 12, tw, 18);
     ctx.fillStyle = color;
-    ctx.fillRect(lx + 2, legendY - 9, 10, 10);
+    ctx.fillRect(lx + 2, legendY - 7, 8, 8);
     ctx.fillStyle = '#fff';
-    ctx.fillText(label, lx + 15, legendY);
-    lx += tw + 4;
+    ctx.fillText(label, lx + 13, legendY);
+    lx += tw + 3;
   });
 
   return canvas.toBuffer('image/jpeg', { quality: 0.92 });

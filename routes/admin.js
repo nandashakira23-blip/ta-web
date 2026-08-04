@@ -3969,16 +3969,70 @@ async function servePipelineStage(res, photoPath, cacheKeyBase, stage, extra) {
             const descriptor = (faces && faces.length > 0) ? faces[0].descriptor : null;
             out = await generateEncodingDiagram(src, descriptor);
         } else if (stage === 'match' && extra) {
-            // Pencocokan wajah: side-by-side probe vs referensi
+            // Pencocokan wajah: side-by-side probe vs referensi (probe + bounding box)
             const refPath = [path.join(__dirname, '..', 'public', extra.refPhoto), path.join(__dirname, '..', extra.refPhoto)]
                 .find(p => fs.existsSync(p));
             const { createCanvas, loadImage } = require('canvas');
-            const probeBuf = await sharp(src).rotate().resize(360, 360, { fit: 'cover', position: 'attention' }).jpeg({ quality: 90 }).toBuffer();
-            const probeImg = await loadImage(probeBuf);
+            // Probe: deteksi wajah → crop + bounding box (sama seperti stage bbox)
+            let probeImg;
+            try {
+                const { detectFaces } = require('../utils/face-recognition');
+                const faces = await detectFaces(src);
+                if (faces && faces.length > 0 && faces[0].box) {
+                    const box = faces[0].box;
+                    const orientedBuf = await sharp(src).rotate().toBuffer();
+                    const img = await loadImage(orientedBuf);
+                    const fcx = (box.xMin + box.xMax) / 2, fcy = (box.yMin + box.yMax) / 2;
+                    let side = Math.round(Math.max(box.width, box.height) * 1.35);
+                    side = Math.max(1, Math.min(side, img.width, img.height));
+                    const left = Math.max(0, Math.min(Math.round(fcx - side / 2), img.width - side));
+                    const top = Math.max(0, Math.min(Math.round(fcy - side / 2), img.height - side));
+                    const tmpCanvas = createCanvas(side, side);
+                    const tmpCtx = tmpCanvas.getContext('2d');
+                    tmpCtx.drawImage(img, left, top, side, side, 0, 0, side, side);
+                    tmpCtx.strokeStyle = extra.isMatch ? '#22c55e' : '#ef4444';
+                    tmpCtx.lineWidth = Math.max(3, Math.round(side * 0.012));
+                    tmpCtx.strokeRect(box.xMin - left, box.yMin - top, box.width, box.height);
+                    const drawn = tmpCanvas.toBuffer('image/jpeg', { quality: 0.92 });
+                    const probeBuf = await sharp(drawn).resize(360, 360, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 90 }).toBuffer();
+                    probeImg = await loadImage(probeBuf);
+                } else {
+                    throw new Error('no face');
+                }
+            } catch (e) {
+                const probeBuf = await sharp(src).rotate().resize(360, 360, { fit: 'cover', position: 'attention' }).jpeg({ quality: 90 }).toBuffer();
+                probeImg = await loadImage(probeBuf);
+            }
+            // Referensi: crop + bounding box juga
             let refImg = null;
             if (refPath) {
-                const refBuf = await sharp(refPath).rotate().resize(360, 360, { fit: 'cover', position: 'attention' }).jpeg({ quality: 90 }).toBuffer();
-                refImg = await loadImage(refBuf);
+                try {
+                    const { detectFaces } = require('../utils/face-recognition');
+                    const faces = await detectFaces(refPath);
+                    if (faces && faces.length > 0 && faces[0].box) {
+                        const box = faces[0].box;
+                        const orientedBuf = await sharp(refPath).rotate().toBuffer();
+                        const img = await loadImage(orientedBuf);
+                        const fcx = (box.xMin + box.xMax) / 2, fcy = (box.yMin + box.yMax) / 2;
+                        let side = Math.round(Math.max(box.width, box.height) * 1.35);
+                        side = Math.max(1, Math.min(side, img.width, img.height));
+                        const left = Math.max(0, Math.min(Math.round(fcx - side / 2), img.width - side));
+                        const top = Math.max(0, Math.min(Math.round(fcy - side / 2), img.height - side));
+                        const tmpCanvas = createCanvas(side, side);
+                        const tmpCtx = tmpCanvas.getContext('2d');
+                        tmpCtx.drawImage(img, left, top, side, side, 0, 0, side, side);
+                        tmpCtx.strokeStyle = '#22c55e';
+                        tmpCtx.lineWidth = Math.max(3, Math.round(side * 0.012));
+                        tmpCtx.strokeRect(box.xMin - left, box.yMin - top, box.width, box.height);
+                        const drawn = tmpCanvas.toBuffer('image/jpeg', { quality: 0.92 });
+                        const refBuf = await sharp(drawn).resize(360, 360, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 90 }).toBuffer();
+                        refImg = await loadImage(refBuf);
+                    }
+                } catch (e) { /* fallback: no bbox on ref */ }
+                if (!refImg) {
+                    const refBuf = await sharp(refPath).rotate().resize(360, 360, { fit: 'cover', position: 'attention' }).jpeg({ quality: 90 }).toBuffer();
+                    refImg = await loadImage(refBuf);
+                }
             }
             const gap = 24;
             const labelH = 60;
