@@ -3944,7 +3944,7 @@ async function servePipelineStage(res, photoPath, cacheKeyBase, stage, extra) {
         .find(p => fs.existsSync(p));
     if (!src) return res.status(404).end();
     const cacheDir = path.join(__dirname, '..', 'public', 'uploads', 'faces-crop');
-    const cacheFile = path.join(cacheDir, cacheKeyBase + '-' + (stage || 'bbox') + '.jpg');
+    const cacheFile = path.join(cacheDir, cacheKeyBase + '-' + (stage || 'thumb') + '.jpg');
     try {
         if (fs.existsSync(cacheFile)) {
             res.setHeader('Cache-Control', 'public, max-age=86400');
@@ -3953,15 +3953,16 @@ async function servePipelineStage(res, photoPath, cacheKeyBase, stage, extra) {
         if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
 
         let out = null;
-        const { detectFaces, drawFaceLandmarks, generateEncodingChart } = require('../utils/face-recognition');
 
-        if (stage === 'align') {
-            // Face alignment: gambar 68 landmark di atas wajah
+        if (!stage) {
+            // Thumbnail ringan: resize saja, TANPA face detection (hemat CPU/RAM)
+            out = await sharp(src).rotate().resize(220, 220, { fit: 'cover', position: 'attention' }).jpeg({ quality: 80 }).toBuffer();
+        } else if (stage === 'align') {
+            const { drawFaceLandmarks } = require('../utils/face-recognition');
             out = await drawFaceLandmarks(src);
-            // Kecilkan agar respons ringan
             out = await sharp(out).resize(720, 720, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 90 }).toBuffer();
         } else if (stage === 'encode') {
-            // Ekstraksi encoding: deteksi wajah, ambil descriptor 128-d, visualisasi bar chart
+            const { detectFaces, generateEncodingChart } = require('../utils/face-recognition');
             const faces = await detectFaces(src);
             if (faces && faces.length > 0 && faces[0].descriptor) {
                 out = await generateEncodingChart(faces[0].descriptor);
@@ -4019,8 +4020,9 @@ async function servePipelineStage(res, photoPath, cacheKeyBase, stage, extra) {
             ctx.font = 'bold 14px sans-serif';
             ctx.fillText(`Status: ${matchStr}`, w / 2, infoY + 18);
             out = cv.toBuffer('image/jpeg', { quality: 0.92 });
-        } else {
-            // Default bbox: crop + kotak hijau (existing logic)
+        } else if (stage === 'bbox') {
+            // Bounding box: crop wajah + kotak (face detection jalan di sini)
+            const { detectFaces } = require('../utils/face-recognition');
             try {
                 const { createCanvas, loadImage } = require('canvas');
                 const faces = await detectFaces(src);
@@ -4067,7 +4069,7 @@ async function servePipelineStage(res, photoPath, cacheKeyBase, stage, extra) {
 router.get('/testing/probe/:pid/:type', requireAuth, requireSuperAdmin, async (req, res) => {
     const pid = parseInt(req.params.pid, 10);
     const type = req.params.type === 'keluar' ? 'keluar' : 'masuk';
-    const stage = req.query.stage || 'bbox';
+    const stage = req.query.stage || '';
     if (!pid) return res.status(400).end();
     try {
         let rows;
@@ -4106,7 +4108,7 @@ router.get('/testing/probe/:pid/:type', requireAuth, requireSuperAdmin, async (r
 router.get('/testing/attempt/:kid/:idx', requireAuth, requireSuperAdmin, async (req, res) => {
     const kid = parseInt(req.params.kid, 10);
     const idx = parseInt(req.params.idx, 10);
-    const stage = req.query.stage || 'bbox';
+    const stage = req.query.stage || '';
     if (!kid || Number.isNaN(idx)) return res.status(400).end();
     try {
         const rows = await db.query('SELECT data_percobaan_gagal FROM karyawan WHERE id = ?', [kid]);
@@ -4142,7 +4144,7 @@ router.get('/testing/attempt/:kid/:idx', requireAuth, requireSuperAdmin, async (
 router.get('/testing/istirahat/:pid/:sidx', requireAuth, requireSuperAdmin, async (req, res) => {
     const pid = parseInt(req.params.pid, 10);
     const sidx = parseInt(req.params.sidx, 10);
-    const stage = req.query.stage || 'bbox';
+    const stage = req.query.stage || '';
     if (!pid || Number.isNaN(sidx)) return res.status(400).end();
     try {
         const rows = await db.query('SELECT data_masuk FROM presensi WHERE id = ?', [pid]);
@@ -4180,7 +4182,7 @@ router.get('/testing/istirahat/:pid/:sidx', requireAuth, requireSuperAdmin, asyn
 // Foto wajah referensi (enrollment)
 router.get('/testing/reference/:rid', requireAuth, requireSuperAdmin, async (req, res) => {
     const rid = parseInt(req.params.rid, 10);
-    const stage = req.query.stage || 'bbox';
+    const stage = req.query.stage || '';
     if (!rid) return res.status(400).end();
     try {
         const rows = await db.query('SELECT photo_path FROM karyawan_face_reference WHERE id = ?', [rid]);
