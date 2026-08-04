@@ -426,9 +426,9 @@ async function generateEncodingDiagram(imagePath, descriptor) {
   // ── KOLOM KIRI: FOTO WAJAH (bbox + landmark, TANPA legend — sudah dijelaskan di tab Alignment) ──
   const lx = pad, ly = contentTop;
   ctx.fillStyle = MUTED;
-  ctx.font = '11px sans-serif';
+  ctx.font = '11px "Courier New", monospace';
   ctx.textAlign = 'left';
-  ctx.fillText('DETEKSI + ALIGNMENT', lx, pad + 14);
+  ctx.fillText('detectFaceWithLandmarks(image)', lx, pad + 14);
 
   let faceImg;
   try {
@@ -465,46 +465,40 @@ async function generateEncodingDiagram(imagePath, descriptor) {
   const ay = contentTop + faceSz / 2;
   drawArrow(ctx, dividerX - 14, ay, dividerX + 14, ay, '#9ca3af', 2);
 
-  // ── KOLOM KANAN: ENCODING 128-D ──
+  // ── KOLOM KANAN: ENCODING 128-D — ditulis apa adanya kayak output array/console,
+  // bukan tabel ber-header (menghindari kesan "didesain"; ini format cetak array biasa). ──
   const rx = lx + leftW + dividerGap, ry = contentTop;
   ctx.fillStyle = MUTED;
-  ctx.font = '11px sans-serif';
+  ctx.font = '11px "Courier New", monospace';
   ctx.textAlign = 'left';
-  ctx.fillText('FACE ENCODING — 128 DIMENSI', rx, pad + 14);
+  ctx.fillText('descriptor.length === 128', rx, pad + 14);
 
-  ctx.fillStyle = INK;
-  ctx.font = 'bold 13px sans-serif';
-  ctx.fillText('Contoh 12 dari 128 nilai (indeks 1–12)', rx, ry + 16);
-
-  // Tabel nilai: index kecil di atas, nilai bold di bawah — kolom rata pakai posisi X, bukan spasi manual.
   if (Array.isArray(descriptor) && descriptor.length === 128) {
-    const cols = 6, colW = rightW / cols;
-    const fmt = (v) => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(5);
+    const fmt = (v) => (v >= 0 ? ' ' : '') + v.toFixed(5);
+    const mono = '12px "Courier New", monospace';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = INK;
+    ctx.font = mono;
+    ctx.fillText('descriptor.slice(0, 12) =', rx, ry + 18);
+    ctx.fillText('[', rx, ry + 38);
+    const cols = 6, colW = (rightW - 14) / cols;
     [0, 1].forEach((row) => {
-      const rowY = ry + 44 + row * 34;
+      const rowY = ry + 38 + (row + 1) * 20;
       for (let c = 0; c < cols; c++) {
         const idx = row * cols + c;
-        const colX = rx + colW * c + colW / 2;
-        ctx.fillStyle = FAINT;
-        ctx.font = 'italic 9px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(`y${idx + 1}`, colX, rowY - 12);
-        ctx.fillStyle = INK;
-        ctx.font = '11px "Courier New", monospace';
-        ctx.fillText(fmt(descriptor[idx]), colX, rowY);
+        const isLast = idx === 11;
+        ctx.fillText(fmt(descriptor[idx]) + (isLast ? '' : ','), rx + 14 + colW * c, rowY);
       }
     });
+    ctx.fillText('  ... 116 nilai lainnya', rx, ry + 38 + 3 * 20);
+    ctx.fillText(']', rx, ry + 38 + 4 * 20);
   }
-  ctx.fillStyle = MUTED;
-  ctx.font = 'italic 10px sans-serif';
-  ctx.textAlign = 'left';
-  ctx.fillText('… (128 nilai total, 12 ditampilkan)', rx, ry + 128);
 
-  // Heatmap: seluruh 128 nilai, palet diverging biru→merah, bingkai tipis.
+  // Heatmap: seluruh 128 nilai, palet diverging biru→merah, bingkai tipis kotak (bukan rounded — plain grid).
   const cell = 6, gap = 1, cols2 = 32, rows2 = 4;
   const gridW = cols2 * (cell + gap) - gap;
   const gridH = rows2 * (cell + gap) - gap;
-  const gx = rx, gy = ry + 152;
+  const gx = rx, gy = ry + 134;
   if (Array.isArray(descriptor) && descriptor.length === 128) {
     let minV = Infinity, maxV = -Infinity;
     for (let i = 0; i < 128; i++) { if (descriptor[i] < minV) minV = descriptor[i]; if (descriptor[i] > maxV) maxV = descriptor[i]; }
@@ -520,8 +514,7 @@ async function generateEncodingDiagram(imagePath, descriptor) {
   }
   ctx.strokeStyle = LINE;
   ctx.lineWidth = 1;
-  roundRect(ctx, gx - 0.5, gy - 0.5, gridW + 1, gridH + 1, 3);
-  ctx.stroke();
+  ctx.strokeRect(gx - 0.5, gy - 0.5, gridW + 1, gridH + 1);
 
   ctx.fillStyle = FAINT;
   ctx.font = '9px sans-serif';

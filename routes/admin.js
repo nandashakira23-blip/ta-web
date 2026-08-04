@@ -3934,17 +3934,6 @@ router.post('/testing/presensi/reset', requireAuth, requireSuperAdmin, async (re
     }
 });
 
-// Helper: path persegi panjang bersudut tumpul (dipakai badge status di stage 'match').
-function roundRectMatch(ctx, x, y, w, h, r) {
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + w, y, x + w, y + h, r);
-    ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y + h, x, y, r);
-    ctx.arcTo(x, y, x + w, y, r);
-    ctx.closePath();
-}
-
 // Pipeline stage: serve gambar tahapan face recognition (bbox / align / encode / match).
 // Gunakan cache per stage + photo agar tiap stage hasilnya diskal.
 async function servePipelineStage(res, photoPath, cacheKeyBase, stage, extra) {
@@ -4061,9 +4050,8 @@ async function servePipelineStage(res, photoPath, cacheKeyBase, stage, extra) {
             const captionY = 360 + 30;      // baseline label "Probe" / "Referensi"
             const statLabelY = captionY + 34;  // baseline label kecil (KEMIRIPAN, dst.)
             const statValueY = statLabelY + 20; // baseline nilai bold
-            const badgeY = statValueY + 26;     // top posisi badge status
-            const badgeH = 32;
-            const h = badgeY + badgeH + 18;
+            const statusY = statValueY + 40;    // baseline baris status (teks polos, bukan badge)
+            const h = statusY + 16;
 
             const cv = createCanvas(w, h);
             const ctx = cv.getContext('2d');
@@ -4106,11 +4094,11 @@ async function servePipelineStage(res, photoPath, cacheKeyBase, stage, extra) {
             stats.forEach((s, i) => {
                 const cx = colW * i + colW / 2;
                 ctx.fillStyle = MUTED;
-                ctx.font = '10px sans-serif';
+                ctx.font = '10px "Courier New", monospace';
                 ctx.textAlign = 'center';
                 ctx.fillText(s.label, cx, statLabelY);
                 ctx.fillStyle = INK;
-                ctx.font = 'bold 15px sans-serif';
+                ctx.font = 'bold 15px "Courier New", monospace';
                 ctx.fillText(s.value, cx, statValueY);
                 if (i > 0) {
                     ctx.strokeStyle = LINE;
@@ -4121,19 +4109,13 @@ async function servePipelineStage(res, photoPath, cacheKeyBase, stage, extra) {
                 }
             });
 
-            // Badge status: pil hijau/merah, jelas jadi kesimpulan akhir.
+            // Status: baris teks polos ala output program (bukan badge/pil UI).
             const matchStr = extra.isMatch ? 'COCOK' : 'TIDAK COCOK';
-            const badgeBg = extra.isMatch ? '#16a34a' : '#dc2626';
-            ctx.font = 'bold 13px sans-serif';
-            const badgeTextW = ctx.measureText(matchStr).width;
-            const badgeW = badgeTextW + 44;
-            const badgeX = (w - badgeW) / 2;
-            ctx.fillStyle = badgeBg;
-            roundRectMatch(ctx, badgeX, badgeY, badgeW, badgeH, badgeH / 2);
-            ctx.fill();
-            ctx.fillStyle = '#ffffff';
+            const matchClr = extra.isMatch ? '#16a34a' : '#dc2626';
+            ctx.fillStyle = matchClr;
+            ctx.font = 'bold 14px "Courier New", monospace';
             ctx.textAlign = 'center';
-            ctx.fillText(matchStr, w / 2, badgeY + badgeH / 2 + 5);
+            ctx.fillText(`>> status: ${matchStr}`, w / 2, statusY);
 
             out = cv.toBuffer('image/jpeg', { quality: 0.92 });
         } else if (stage === 'bbox') {
