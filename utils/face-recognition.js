@@ -383,7 +383,7 @@ async function drawFaceLandmarks(imagePath) {
 
 /**
  * Diagram alur proses ekstraksi face encoding 128 dimensi.
- * Menampilkan pipeline: Citra Wajah → CNN (FaceNet) → Face Encoding (128-D).
+ * Layout horizontal 3 kolom: Bounding Box → Face Alignment → Encoding 128-D.
  * Cocok untuk dokumentasi skripsi/tesis.
  * @param {string} imagePath path file gambar
  * @param {number[]} descriptor array 128 dimensi (hasil ekstraksi)
@@ -392,174 +392,177 @@ async function drawFaceLandmarks(imagePath) {
 async function generateEncodingDiagram(imagePath, descriptor) {
   await initialize();
   const img = await loadOrientedImage(imagePath);
-  const W = 680;
-  const faceSize = 170;
-  const cnnH = 140;
-  const vecH = 130;
-  const arrowH = 40;
-  const padY = 24;
-  const totalH = padY + faceSize + arrowH + cnnH + arrowH + vecH + padY + 20;
 
-  const cv = createCanvas(W, totalH);
+  // Deteksi wajah + landmark sekali untuk semua blok
+  const detections = await faceapi
+    .detectSingleFace(img, new faceapi.SsdMobilenetv1Options({ minConfidence: DETECTION_MIN_CONFIDENCE }))
+    .withFaceLandmarks();
+
+  const box = detections && detections.box ? detections.box : null;
+  const positions = detections && detections.landmarks ? detections.landmarks.positions : null;
+
+  // ── Layout ──
+  const colW = 210;       // lebar tiap kolom
+  const faceSz = 150;     // ukuran thumbnail wajah
+  const arrowW = 36;      // lebar area panah antar kolom
+  const padX = 12;
+  const padY = 20;
+  const labelH = 28;      // tinggi label judul
+  const headerH = 26;     // tinggi header "Tahap 1/2/3"
+  const blockPad = 14;    // padding dalam blok
+  const blockW = colW;
+  const blockH = headerH + blockPad + faceSz + blockPad + labelH;
+  const totalW = padX + blockW + arrowW + blockW + arrowW + blockW + padX;
+  const totalH = padY + blockH + padY + 30;
+
+  const cv = createCanvas(totalW, totalH);
   const ctx = cv.getContext('2d');
 
   // Background putih
   ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, W, totalH);
+  ctx.fillRect(0, 0, totalW, totalH);
 
-  const cx = W / 2;
-  let y = padY;
+  // Helper: crop face dari gambar ke buffer
+  function cropFaceToBuf(buf, drawBox, boxColor, drawLandmarks) {
+    const tmp = createCanvas(faceSz, faceSz);
+    const tctx = tmp.getContext('2d');
+    tctx.fillStyle = '#f5f5f5';
+    tctx.fillRect(0, 0, faceSz, faceSz);
 
-  // ── BLOK 1: CITRA WAJAH ──
-  const boxW = faceSize + 80;
-  const boxH = faceSize + 50;
-  ctx.strokeStyle = '#3b82f6';
-  ctx.lineWidth = 2.5;
-  roundRect(ctx, cx - boxW / 2, y, boxW, boxH, 10);
-  ctx.stroke();
-  ctx.fillStyle = '#eff6ff';
-  roundRect(ctx, cx - boxW / 2, y, boxW, boxH, 10);
-  ctx.fill();
-  ctx.strokeStyle = '#3b82f6';
-  ctx.lineWidth = 2.5;
-  roundRect(ctx, cx - boxW / 2, y, boxW, boxH, 10);
-  ctx.stroke();
-
-  // Label
-  ctx.fillStyle = '#1e40af';
-  ctx.font = 'bold 14px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('Citra Wajah', cx, y + 22);
-
-  // Gambar wajah (crop + scale)
-  let faceImg = img;
-  try {
-    const detections = await faceapi
-      .detectSingleFace(img, new faceapi.SsdMobilenetv1Options({ minConfidence: DETECTION_MIN_CONFIDENCE }))
-      .withFaceLandmarks();
-    if (detections && detections.box) {
-      const box = detections.box;
+    if (box) {
       const fcx = box.x + box.width / 2, fcy = box.y + box.height / 2;
-      const side = Math.round(Math.max(box.width, box.height) * 1.3);
+      const side = Math.round(Math.max(box.width, box.height) * 1.35);
       const sx = Math.max(0, Math.round(fcx - side / 2));
       const sy = Math.max(0, Math.round(fcy - side / 2));
       const sw = Math.min(side, img.width - sx);
       const sh = Math.min(side, img.height - sy);
-      const tmpCanvas = createCanvas(faceSize, faceSize);
-      const tmpCtx = tmpCanvas.getContext('2d');
-      tmpCtx.drawImage(img, sx, sy, sw, sh, 0, 0, faceSize, faceSize);
-      faceImg = tmpCanvas;
+      tctx.drawImage(img, sx, sy, sw, sh, 0, 0, faceSz, faceSz);
+
+      if (drawBox) {
+        const scale = faceSz / side;
+        const bx = (box.x - sx) * scale, by = (box.y - sy) * scale;
+        const bw = box.width * scale, bh = box.height * scale;
+        tctx.strokeStyle = boxColor || '#22c55e';
+        tctx.lineWidth = Math.max(2, Math.round(faceSz * 0.012));
+        tctx.strokeRect(bx, by, bw, bh);
+      }
+
+      if (drawLandmarks && positions) {
+        const scale = faceSz / side;
+        const lw = Math.max(0.8, faceSz * 0.002);
+        const dr = Math.max(1.5, faceSz * 0.006);
+        function lx(px) { return (px - sx) * scale; }
+        function ly(py) { return (py - sy) * scale; }
+        function poly(indices, color, w) {
+          tctx.beginPath(); tctx.strokeStyle = color; tctx.lineWidth = w || lw;
+          for (let i = 0; i < indices.length; i++) {
+            const p = positions[indices[i]]; if (!p) continue;
+            if (i === 0) tctx.moveTo(lx(p.x), ly(p.y)); else tctx.lineTo(lx(p.x), ly(p.y));
+          }
+          tctx.stroke();
+        }
+        poly([...Array(17).keys()], '#f97316', lw * 1.5);
+        poly([17,18,19,20,21], '#eab308', lw);
+        poly([22,23,24,25,26], '#eab308', lw);
+        poly([27,28,29,30], '#a855f7', lw);
+        poly([31,32,33,34,35], '#a855f7', lw);
+        poly([36,37,38,39,40,41,36], '#3b82f6', lw);
+        poly([42,43,44,45,46,47,42], '#3b82f6', lw);
+        poly([48,49,50,51,52,53,54,55,56,57,58,59,48], '#ef4444', lw * 1.3);
+        poly([60,61,62,63,64,65,66,67,60], '#ef4444', lw * 0.8);
+        positions.forEach((p, i) => {
+          if (i % 8 !== 0) return;
+          tctx.beginPath(); tctx.arc(lx(p.x), ly(p.y), dr, 0, 2*Math.PI);
+          tctx.fillStyle = '#3b82f6'; tctx.fill();
+        });
+      }
     } else {
-      const tmpCanvas = createCanvas(faceSize, faceSize);
-      const tmpCtx = tmpCanvas.getContext('2d');
-      tmpCtx.drawImage(img, 0, 0, img.width, img.height, 0, 0, faceSize, faceSize);
-      faceImg = tmpCanvas;
+      tctx.drawImage(img, 0, 0, img.width, img.height, 0, 0, faceSz, faceSz);
     }
-  } catch (e) {
-    const tmpCanvas = createCanvas(faceSize, faceSize);
-    const tmpCtx = tmpCanvas.getContext('2d');
-    tmpCtx.drawImage(img, 0, 0, img.width, img.height, 0, 0, faceSize, faceSize);
-    faceImg = tmpCanvas;
-  }
-  ctx.drawImage(faceImg, cx - faceSize / 2, y + 30, faceSize, faceSize);
-
-  y += boxH;
-
-  // ── PANAH 1 ──
-  drawArrow(ctx, cx, y + 5, cx, y + arrowH - 5, '#666', 3);
-  y += arrowH;
-
-  // ── BLOK 2: CNN / FACENET ──
-  const cnnW = 340;
-  ctx.fillStyle = '#f0fdf4';
-  roundRect(ctx, cx - cnnW / 2, y, cnnW, cnnH, 10);
-  ctx.fill();
-  ctx.strokeStyle = '#22c55e';
-  ctx.lineWidth = 2.5;
-  roundRect(ctx, cx - cnnW / 2, y, cnnW, cnnH, 10);
-  ctx.stroke();
-
-  // Layer boxes inside CNN
-  const layers = 5;
-  const layerW = 38;
-  const layerGap = 18;
-  const layerStartX = cx - ((layers * layerW + (layers - 1) * layerGap) / 2);
-  const layerTopY = y + 38;
-  const layerColors = ['#bbf7d0', '#86efac', '#4ade80', '#22c55e', '#16a34a'];
-  for (let i = 0; i < layers; i++) {
-    const lx = layerStartX + i * (layerW + layerGap);
-    const lh = 20 + i * 12;
-    ctx.fillStyle = layerColors[i];
-    ctx.fillRect(lx, layerTopY + (64 - lh) / 2, layerW, lh);
-    ctx.strokeStyle = '#166534';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(lx, layerTopY + (64 - lh) / 2, layerW, lh);
+    return tmp.toBuffer('image/jpeg', { quality: 0.9 });
   }
 
-  ctx.fillStyle = '#166534';
-  ctx.font = 'bold 15px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('FaceNet / CNN', cx, y + 24);
-  ctx.font = '11px sans-serif';
-  ctx.fillStyle = '#555';
-  ctx.fillText('(SSD MobileNet v1 + Face Recognition Net)', cx, y + cnnH - 10);
+  // ── GAMBAR 3 KOLOM ──
+  const stages = [
+    { title: 'Bounding Box',       sub: 'Deteksi Wajah',      color: '#3b82f6', bg: '#eff6ff',
+      draw: () => cropFaceToBuf(img, true, '#22c55e', false) },
+    { title: 'Face Alignment',     sub: '68 Titik Landmark',  color: '#f97316', bg: '#fff7ed',
+      draw: () => cropFaceToBuf(img, true, '#22c55e', true) },
+    { title: 'Encoding 128-D',     sub: 'CNN Embedding Vector',color: '#a855f7', bg: '#faf5ff',
+      draw: null }
+  ];
 
-  y += cnnH;
+  for (let si = 0; si < 3; si++) {
+    const s = stages[si];
+    const bx = padX + si * (blockW + arrowW);
+    const by = padY;
 
-  // ── PANAH 2 ──
-  drawArrow(ctx, cx, y + 5, cx, y + arrowH - 5, '#666', 3);
-  y += arrowH;
+    // Header "Tahap 1/2/3"
+    ctx.fillStyle = s.color;
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Tahap ' + (si + 1), bx + blockW / 2, by + 16);
 
-  // ── BLOK 3: FACE ENCODING 128-D ──
-  const vecW = 560;
-  ctx.fillStyle = '#faf5ff';
-  roundRect(ctx, cx - vecW / 2, y, vecW, vecH, 10);
-  ctx.fill();
-  ctx.strokeStyle = '#a855f7';
-  ctx.lineWidth = 2.5;
-  roundRect(ctx, cx - vecW / 2, y, vecW, vecH, 10);
-  ctx.stroke();
+    // Blok
+    ctx.fillStyle = s.bg;
+    roundRect(ctx, bx, by + headerH, blockW, blockH - headerH, 8);
+    ctx.fill();
+    ctx.strokeStyle = s.color;
+    ctx.lineWidth = 2;
+    roundRect(ctx, bx, by + headerH, blockW, blockH - headerH, 8);
+    ctx.stroke();
 
-  ctx.fillStyle = '#6b21a8';
-  ctx.font = 'bold 14px sans-serif';
-  ctx.fillText('Face Encoding (128 Dimensi)', cx, y + 22);
+    // Judul
+    ctx.fillStyle = '#111';
+    ctx.font = 'bold 13px sans-serif';
+    ctx.fillText(s.title, bx + blockW / 2, by + headerH + blockPad + 14);
 
-  // Heatmap grid: 16 x 8 = 128 kotak kecil
-  const cellSize = 16;
-  const cellGap = 2;
-  const gridCols = 32;
-  const gridRows = 4;
-  const gridStartX = cx - (gridCols * (cellSize + cellGap) - cellGap) / 2;
-  const gridStartY = y + 34;
-  if (Array.isArray(descriptor) && descriptor.length === 128) {
-    let minV = Infinity, maxV = -Infinity;
-    for (let i = 0; i < 128; i++) { if (descriptor[i] < minV) minV = descriptor[i]; if (descriptor[i] > maxV) maxV = descriptor[i]; }
-    const range = maxV - minV || 1;
-    for (let i = 0; i < 128; i++) {
-      const col = i % gridCols;
-      const row = Math.floor(i / gridCols);
-      const gx = gridStartX + col * (cellSize + cellGap);
-      const gy = gridStartY + row * (cellSize + cellGap);
-      const t = (descriptor[i] - minV) / range; // 0..1
-      const r = Math.round(59 + t * 180);
-      const g = Math.round(130 - t * 100);
-      const b = Math.round(246 - t * 160);
-      ctx.fillStyle = `rgb(${r},${g},${b})`;
-      ctx.fillRect(gx, gy, cellSize, cellSize);
+    // Konten
+    const contentY = by + headerH + blockPad + 22;
+    if (si < 2) {
+      // Blok 1 & 2: gambar wajah
+      const faceBuf = s.draw();
+      const faceImg = await loadImage(faceBuf);
+      ctx.drawImage(faceImg, bx + (blockW - faceSz) / 2, contentY, faceSz, faceSz);
+    } else {
+      // Blok 3: heatmap encoding 128-d
+      const cell = 10, gap = 1, cols = 32, rows = 4;
+      const gridW = cols * (cell + gap) - gap;
+      const gridH = rows * (cell + gap) - gap;
+      const gx = bx + (blockW - gridW) / 2;
+      const gy = contentY + (faceSz - gridH) / 2;
+      if (Array.isArray(descriptor) && descriptor.length === 128) {
+        let minV = Infinity, maxV = -Infinity;
+        for (let i = 0; i < 128; i++) { if (descriptor[i] < minV) minV = descriptor[i]; if (descriptor[i] > maxV) maxV = descriptor[i]; }
+        const range = maxV - minV || 1;
+        for (let i = 0; i < 128; i++) {
+          const col = i % cols, row = Math.floor(i / cols);
+          const t = (descriptor[i] - minV) / range;
+          const r = Math.round(59 + t * 180), g = Math.round(130 - t * 100), b = Math.round(246 - t * 160);
+          ctx.fillStyle = `rgb(${r},${g},${b})`;
+          ctx.fillRect(gx + col * (cell + gap), gy + row * (cell + gap), cell, cell);
+        }
+      }
+    }
+
+    // Sub-label bawah
+    ctx.fillStyle = '#666';
+    ctx.font = '10px sans-serif';
+    ctx.fillText(s.sub, bx + blockW / 2, by + headerH + blockPad + faceSz + blockPad + 10);
+
+    // Panah antar kolom (kecuali setelah kolom terakhir)
+    if (si < 2) {
+      const ax = bx + blockW;
+      const ay = by + blockH / 2;
+      drawArrow(ctx, ax + 4, ay, ax + arrowW - 4, ay, '#888', 2.5);
     }
   }
-  // Label heatmap
-  ctx.fillStyle = '#888';
-  ctx.font = '10px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('Visualisasi 128 nilai embedding (biru = rendah, ungu = tinggi)', cx, y + vecH - 8);
 
-  y += vecH + 10;
-
-  // ── FOOTER LABEL ──
+  // Footer
   ctx.fillStyle = '#999';
   ctx.font = '11px sans-serif';
-  ctx.fillText('Ekstraksi Face Encoding — CNN Embedding Vector 128 Dimensi', cx, y);
+  ctx.textAlign = 'center';
+  ctx.fillText('Proses Ekstraksi Face Encoding — CNN Embedding Vector 128 Dimensi', totalW / 2, totalH - 8);
 
   return cv.toBuffer('image/jpeg', { quality: 0.94 });
 }
