@@ -4041,17 +4041,19 @@ async function servePipelineStage(res, photoPath, cacheKeyBase, stage, extra) {
             let refImg = null;
             if (refPath) refImg = await makeMatchFace(refPath, '#22c55e');
 
-            // Palet netral gaya figur laporan — warna cuma dipakai untuk makna semantik (bbox/badge status).
-            const INK = '#1f2937', MUTED = '#6b7280', FAINT = '#9ca3af', LINE = '#e5e7eb';
+            // Minimalis sengaja: cuma 2 foto (bbox+landmark, hasil deteksi asli) + baris teks
+            // polos di bawahnya. Tanpa kartu statistik/badge/kolom — itu bukan bentuk output
+            // face-api.js yang wajar, kelihatan seperti ilustrasi buatan.
+            const INK = '#000000';
 
-            const gap = 24;
+            const gap = 20;
             const w = 360 + (refImg ? gap + 360 : 0);
-            // Tinggi dihitung eksplisit dari tiap baris konten (bukan angka ajaib) supaya tidak ada teks terpotong.
-            const captionY = 360 + 30;      // baseline label "Probe" / "Referensi"
-            const statLabelY = captionY + 34;  // baseline label kecil (KEMIRIPAN, dst.)
-            const statValueY = statLabelY + 20; // baseline nilai bold
-            const statusY = statValueY + 40;    // baseline baris status (teks polos, bukan badge)
-            const h = statusY + 16;
+            const captionY = 360 + 24;      // baseline label "Probe" / "Referensi"
+            const lineGap = 22;
+            const line1Y = captionY + 34;   // Jarak Euclidean
+            const line2Y = line1Y + lineGap; // Ambang
+            const line3Y = line2Y + lineGap; // Status
+            const h = line3Y + 16;
 
             const cv = createCanvas(w, h);
             const ctx = cv.getContext('2d');
@@ -4060,62 +4062,30 @@ async function servePipelineStage(res, photoPath, cacheKeyBase, stage, extra) {
 
             ctx.drawImage(probeImg, 0, 0, 360, 360);
             ctx.fillStyle = INK;
-            ctx.font = 'bold 13px sans-serif';
+            ctx.font = '13px sans-serif';
             ctx.textAlign = 'center';
             ctx.fillText('Probe', 180, captionY);
             if (refImg) {
                 ctx.drawImage(refImg, 360 + gap, 0, 360, 360);
                 ctx.fillText('Referensi', 360 + gap + 180, captionY);
-                // Garis pembatas tipis antar foto
-                ctx.strokeStyle = LINE;
-                ctx.beginPath();
-                ctx.moveTo(360 + gap / 2, 0);
-                ctx.lineTo(360 + gap / 2, 360);
-                ctx.stroke();
             }
 
-            // Garis pembatas sebelum baris statistik
-            ctx.strokeStyle = LINE;
-            ctx.beginPath();
-            ctx.moveTo(0, captionY + 10);
-            ctx.lineTo(w, captionY + 10);
-            ctx.stroke();
-
-            // Statistik: 3 kelompok label+nilai merata, dipisah garis tipis (bukan karakter "|").
-            const simStr = extra.similarity != null ? (Math.round(Number(extra.similarity) * 1000) / 10).toString().replace('.', ',') + '%' : '-';
+            // Statistik: teks polos berbaris, kayak print() biasa — bukan kartu/kolom.
             const distStr = extra.distance != null ? Number(extra.distance).toFixed(4) : '-';
             const thresholdStr = extra.threshold != null ? Number(extra.threshold).toFixed(2) : '0.60';
-            const stats = [
-                { label: 'KEMIRIPAN', value: simStr },
-                { label: 'JARAK EUCLIDEAN', value: distStr },
-                { label: 'AMBANG', value: thresholdStr }
-            ];
-            const colW = w / stats.length;
-            stats.forEach((s, i) => {
-                const cx = colW * i + colW / 2;
-                ctx.fillStyle = MUTED;
-                ctx.font = '10px "Courier New", monospace';
-                ctx.textAlign = 'center';
-                ctx.fillText(s.label, cx, statLabelY);
-                ctx.fillStyle = INK;
-                ctx.font = 'bold 15px "Courier New", monospace';
-                ctx.fillText(s.value, cx, statValueY);
-                if (i > 0) {
-                    ctx.strokeStyle = LINE;
-                    ctx.beginPath();
-                    ctx.moveTo(colW * i, statLabelY - 12);
-                    ctx.lineTo(colW * i, statValueY + 4);
-                    ctx.stroke();
-                }
-            });
+            ctx.font = '13px sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText(`Jarak Euclidean: ${distStr}`, 20, line1Y);
+            ctx.fillText(`Ambang: ${thresholdStr}`, 20, line2Y);
 
-            // Status: baris teks polos ala output program (bukan badge/pil UI).
             const matchStr = extra.isMatch ? 'COCOK' : 'TIDAK COCOK';
             const matchClr = extra.isMatch ? '#16a34a' : '#dc2626';
+            ctx.font = 'bold 13px sans-serif';
+            ctx.fillStyle = INK;
+            ctx.fillText('Status: ', 20, line3Y);
+            const statusLabelW = ctx.measureText('Status: ').width;
             ctx.fillStyle = matchClr;
-            ctx.font = 'bold 14px "Courier New", monospace';
-            ctx.textAlign = 'center';
-            ctx.fillText(`>> status: ${matchStr}`, w / 2, statusY);
+            ctx.fillText(matchStr, 20 + statusLabelW, line3Y);
 
             out = cv.toBuffer('image/jpeg', { quality: 0.92 });
         } else if (stage === 'bbox') {

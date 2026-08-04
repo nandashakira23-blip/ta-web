@@ -402,33 +402,32 @@ async function drawFaceLandmarks(imagePath, opts = {}) {
 async function generateEncodingDiagram(imagePath, descriptor) {
   await initialize();
 
-  // Palet netral gaya figur laporan ilmiah — bukan kartu warna-warni.
-  const INK = '#1f2937';      // slate-800 — teks utama
-  const MUTED = '#6b7280';    // slate-500 — teks sekunder
-  const FAINT = '#9ca3af';    // slate-400 — teks tersier/footer
-  const LINE = '#e5e7eb';     // slate-200 — garis pembatas tipis
+  // Minimalis sengaja: 2 kotak bersudut siku + panah, persis diagram
+  // "Wajah+BBox+Landmark -> Descriptor(128-D)" yang biasa dipakai di dokumentasi
+  // face-api/FaceNet. Tanpa kartu berwarna, tanpa heatmap, tanpa caption custom —
+  // supaya kelihatan hasil implementasi asli, bukan ilustrasi buatan.
+  const INK = '#000000';
+  const BORDER = '#333333';
 
-  // ── Layout ──
-  const pad = 24;
+  const pad = 20;
   const faceSz = 260;
-  const leftW = faceSz;
-  const dividerGap = 44;
-  const rightW = 420;
-  const totalW = pad + leftW + dividerGap + rightW + pad;
-  const contentTop = pad + 34; // ruang untuk judul kolom kiri/kanan
-  const totalH = contentTop + faceSz + 34 + 30;
+  const boxPadR = 18;
+  const arrowW = 50;
+  const rightW = 300;
+  const totalW = pad + faceSz + arrowW + rightW + pad;
+  const boxH = faceSz + 8;
+  const totalH = pad + boxH + pad;
 
   const cv = createCanvas(totalW, totalH);
   const ctx = cv.getContext('2d');
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, totalW, totalH);
 
-  // ── KOLOM KIRI: FOTO WAJAH (bbox + landmark, TANPA legend — sudah dijelaskan di tab Alignment) ──
-  const lx = pad, ly = contentTop;
-  ctx.fillStyle = MUTED;
-  ctx.font = '11px "Courier New", monospace';
-  ctx.textAlign = 'left';
-  ctx.fillText('detectFaceWithLandmarks(image)', lx, pad + 14);
+  // ── KOTAK KIRI: foto (bbox + landmark, hasil detectSingleFace().withFaceLandmarks()) ──
+  const lx = pad, ly = pad;
+  ctx.strokeStyle = BORDER;
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(lx + 0.5, ly + 0.5, faceSz, boxH);
 
   let faceImg;
   try {
@@ -444,133 +443,51 @@ async function generateEncodingDiagram(imagePath, descriptor) {
   const fw = faceImg.width, fh = faceImg.height;
   const ratio = Math.min(faceSz / fw, faceSz / fh);
   const dw = Math.round(fw * ratio), dh = Math.round(fh * ratio);
-  ctx.drawImage(faceImg, lx + (leftW - dw) / 2, ly, dw, dh);
-  ctx.strokeStyle = LINE;
-  ctx.lineWidth = 1;
-  ctx.strokeRect(lx + (leftW - dw) / 2 + 0.5, ly + 0.5, dw - 1, dh - 1);
+  ctx.drawImage(faceImg, lx + (faceSz - dw) / 2, ly + 4, dw, dh);
 
-  ctx.fillStyle = MUTED;
-  ctx.font = '11px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('Bounding box + 68 titik landmark', lx + leftW / 2, ly + faceSz + 20);
-
-  // ── PEMBATAS TIPIS + PANAH (bukan kartu berwarna) ──
-  const dividerX = lx + leftW + dividerGap / 2;
-  ctx.strokeStyle = LINE;
-  ctx.lineWidth = 1;
+  // ── PANAH POLOS ──
+  const ax = lx + faceSz, ay = ly + boxH / 2;
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.moveTo(dividerX, contentTop);
-  ctx.lineTo(dividerX, contentTop + faceSz);
+  ctx.moveTo(ax + 6, ay);
+  ctx.lineTo(ax + arrowW - 10, ay);
   ctx.stroke();
-  const ay = contentTop + faceSz / 2;
-  drawArrow(ctx, dividerX - 14, ay, dividerX + 14, ay, '#9ca3af', 2);
+  ctx.beginPath();
+  ctx.moveTo(ax + arrowW - 10, ay - 5);
+  ctx.lineTo(ax + arrowW, ay);
+  ctx.lineTo(ax + arrowW - 10, ay + 5);
+  ctx.closePath();
+  ctx.fillStyle = INK;
+  ctx.fill();
 
-  // ── KOLOM KANAN: ENCODING 128-D — ditulis apa adanya kayak output array/console,
-  // bukan tabel ber-header (menghindari kesan "didesain"; ini format cetak array biasa). ──
-  const rx = lx + leftW + dividerGap, ry = contentTop;
-  ctx.fillStyle = MUTED;
-  ctx.font = '11px "Courier New", monospace';
+  // ── KOTAK KANAN: descriptor — dicetak persis format Node.js console.log(Float32Array) ──
+  const rx = lx + faceSz + arrowW, ry = ly;
+  ctx.strokeStyle = BORDER;
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(rx + 0.5, ry + 0.5, rightW, boxH);
+
+  ctx.fillStyle = INK;
   ctx.textAlign = 'left';
-  ctx.fillText('descriptor.length === 128', rx, pad + 14);
+  ctx.font = 'bold 13px sans-serif';
+  ctx.fillText('Descriptor (128-D)', rx + boxPadR, ry + 30);
 
   if (Array.isArray(descriptor) && descriptor.length === 128) {
-    const fmt = (v) => (v >= 0 ? ' ' : '') + v.toFixed(5);
-    const mono = '12px "Courier New", monospace';
-    ctx.textAlign = 'left';
-    ctx.fillStyle = INK;
-    ctx.font = mono;
-    ctx.fillText('descriptor.slice(0, 12) =', rx, ry + 18);
-    ctx.fillText('[', rx, ry + 38);
-    const cols = 6, colW = (rightW - 14) / cols;
-    [0, 1].forEach((row) => {
-      const rowY = ry + 38 + (row + 1) * 20;
-      for (let c = 0; c < cols; c++) {
-        const idx = row * cols + c;
-        const isLast = idx === 11;
-        ctx.fillText(fmt(descriptor[idx]) + (isLast ? '' : ','), rx + 14 + colW * c, rowY);
-      }
-    });
-    ctx.fillText('  ... 116 nilai lainnya', rx, ry + 38 + 3 * 20);
-    ctx.fillText(']', rx, ry + 38 + 4 * 20);
-  }
-
-  // Heatmap: seluruh 128 nilai, palet diverging biru→merah, bingkai tipis kotak (bukan rounded — plain grid).
-  const cell = 6, gap = 1, cols2 = 32, rows2 = 4;
-  const gridW = cols2 * (cell + gap) - gap;
-  const gridH = rows2 * (cell + gap) - gap;
-  const gx = rx, gy = ry + 134;
-  if (Array.isArray(descriptor) && descriptor.length === 128) {
-    let minV = Infinity, maxV = -Infinity;
-    for (let i = 0; i < 128; i++) { if (descriptor[i] < minV) minV = descriptor[i]; if (descriptor[i] > maxV) maxV = descriptor[i]; }
-    const range = maxV - minV || 1;
-    for (let i = 0; i < 128; i++) {
-      const col = i % cols2, row = Math.floor(i / cols2);
-      const t = (descriptor[i] - minV) / range;
-      // Diverging biru (rendah) -> abu netral (tengah) -> merah (tinggi)
-      const r = Math.round(37 + t * 190), g = Math.round(99 - t * 60 + (1 - Math.abs(t - 0.5) * 2) * 20), b = Math.round(235 - t * 200);
-      ctx.fillStyle = `rgb(${r},${g},${b})`;
-      ctx.fillRect(gx + col * (cell + gap), gy + row * (cell + gap), cell, cell);
+    const shown = 8;
+    ctx.font = '11px "Courier New", monospace';
+    const colW = (rightW - boxPadR * 2) / 2;
+    for (let i = 0; i < shown; i++) {
+      const col = i % 2, row = Math.floor(i / 2);
+      const isLast = i === shown - 1;
+      const val = descriptor[i].toFixed(4) + (isLast ? '' : ',');
+      ctx.fillText(val, rx + boxPadR + col * colW, ry + 56 + row * 20);
     }
+    // Format persis Node.js util.inspect saat array terpotong: "... N more items"
+    ctx.fillStyle = '#555555';
+    ctx.fillText(`... ${128 - shown} more items`, rx + boxPadR, ry + 56 + 4 * 20);
   }
-  ctx.strokeStyle = LINE;
-  ctx.lineWidth = 1;
-  ctx.strokeRect(gx - 0.5, gy - 0.5, gridW + 1, gridH + 1);
-
-  ctx.fillStyle = FAINT;
-  ctx.font = '9px sans-serif';
-  ctx.textAlign = 'left';
-  ctx.fillText('y1', gx, gy + gridH + 13);
-  ctx.textAlign = 'right';
-  ctx.fillText('y128', gx + gridW, gy + gridH + 13);
-  ctx.textAlign = 'center';
-  ctx.fillText('nilai rendah → tinggi', gx + gridW / 2, gy + gridH + 13);
-
-  // Footer
-  ctx.strokeStyle = LINE;
-  ctx.beginPath();
-  ctx.moveTo(pad, totalH - 26);
-  ctx.lineTo(totalW - pad, totalH - 26);
-  ctx.stroke();
-  ctx.fillStyle = FAINT;
-  ctx.font = '10px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('Proses Ekstraksi Face Encoding — CNN Embedding Vector 128 Dimensi', totalW / 2, totalH - 10);
 
   return cv.toBuffer('image/jpeg', { quality: 0.94 });
-}
-
-// Helper: rounded rectangle
-function roundRect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + w - r, y);
-  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-  ctx.lineTo(x + w, y + h - r);
-  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-  ctx.lineTo(x + r, y + h);
-  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
-  ctx.closePath();
-}
-
-// Helper: draw arrow
-function drawArrow(ctx, x1, y1, x2, y2, color, width) {
-  const headLen = 10;
-  const angle = Math.atan2(y2 - y1, x2 - x1);
-  ctx.strokeStyle = color;
-  ctx.fillStyle = color;
-  ctx.lineWidth = width;
-  ctx.beginPath();
-  ctx.moveTo(x1, y1);
-  ctx.lineTo(x2, y2);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(x2, y2);
-  ctx.lineTo(x2 - headLen * Math.cos(angle - Math.PI / 6), y2 - headLen * Math.sin(angle - Math.PI / 6));
-  ctx.lineTo(x2 - headLen * Math.cos(angle + Math.PI / 6), y2 - headLen * Math.sin(angle + Math.PI / 6));
-  ctx.closePath();
-  ctx.fill();
 }
 
 /**
