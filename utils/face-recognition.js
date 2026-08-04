@@ -391,21 +391,13 @@ async function drawFaceLandmarks(imagePath) {
  */
 async function generateEncodingDiagram(imagePath, descriptor) {
   await initialize();
-  const img = await loadOrientedImage(imagePath);
-
-  const detections = await faceapi
-    .detectSingleFace(img, new faceapi.SsdMobilenetv1Options({ minConfidence: DETECTION_MIN_CONFIDENCE }))
-    .withFaceLandmarks();
-
-  const box = detections && detections.box ? detections.box : null;
-  const positions = detections && detections.landmarks ? detections.landmarks.positions : null;
 
   // ── Layout ──
   const faceSz = 240;
   const pad = 20;
-  const arrowW = 50;
-  const leftW = pad + faceSz + pad;       // kolom kiri: foto
-  const rightW = 540;                      // kolom kanan: teks encoding
+  const arrowW = 40;
+  const leftW = pad + faceSz + pad;
+  const rightW = 440;
   const totalW = leftW + arrowW + rightW + pad;
   const blockH = faceSz + pad * 2 + 50;
   const totalH = blockH + pad + 30;
@@ -415,7 +407,7 @@ async function generateEncodingDiagram(imagePath, descriptor) {
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, totalW, totalH);
 
-  // ── KOLOM KIRI: FOTO WAJAH + BBOX + LANDMARK ──
+  // ── KOLOM KIRI: FOTO WAJAH (pakai drawFaceLandmarks, sama kayak tab Alignment) ──
   const lx = pad, ly = pad;
   ctx.fillStyle = '#eff6ff';
   roundRect(ctx, lx, ly, leftW, blockH, 10);
@@ -426,81 +418,38 @@ async function generateEncodingDiagram(imagePath, descriptor) {
   ctx.stroke();
 
   ctx.fillStyle = '#1e40af';
-  ctx.font = 'bold 13px sans-serif';
+  ctx.font = 'bold 12px sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('Deteksi & Alignment', lx + leftW / 2, ly + 24);
+  ctx.fillText('Deteksi & Alignment', lx + leftW / 2, ly + 22);
 
-  // Crop face + bbox + landmarks
-  const tmp = createCanvas(faceSz, faceSz);
-  const tctx = tmp.getContext('2d');
-  tctx.fillStyle = '#f5f5f5';
-  tctx.fillRect(0, 0, faceSz, faceSz);
-
-  if (box) {
-    const fcx = box.x + box.width / 2, fcy = box.y + box.height / 2;
-    const side = Math.round(Math.max(box.width, box.height) * 1.35);
-    // Pastikan crop selalu square penuh (adjust posisi, bukan potong dimensi)
-    let sx = Math.round(fcx - side / 2);
-    let sy = Math.round(fcy - side / 2);
-    sx = Math.max(0, Math.min(sx, img.width - side));
-    sy = Math.max(0, Math.min(sy, img.height - side));
-    tctx.drawImage(img, sx, sy, side, side, 0, 0, faceSz, faceSz);
-    const scale = faceSz / side;
-
-    // Bounding box hijau (tebal, jelas terlihat)
-    tctx.strokeStyle = '#22c55e';
-    tctx.lineWidth = Math.max(3, Math.round(faceSz * 0.02));
-    tctx.strokeRect((box.x - sx) * scale, (box.y - sy) * scale, box.width * scale, box.height * scale);
-
-    // Landmarks
-    if (positions) {
-      const lw = Math.max(1.5, faceSz * 0.006);
-      const dr = Math.max(3, faceSz * 0.014);
-      function lx(px) { return (px - sx) * scale; }
-      function ly(py) { return (py - sy) * scale; }
-      function poly(indices, color, w) {
-        tctx.beginPath(); tctx.strokeStyle = color; tctx.lineWidth = w || lw;
-        for (let i = 0; i < indices.length; i++) {
-          const p = positions[indices[i]]; if (!p) continue;
-          if (i === 0) tctx.moveTo(lx(p.x), ly(p.y)); else tctx.lineTo(lx(p.x), ly(p.y));
-        }
-        tctx.stroke();
-      }
-      poly([...Array(17).keys()], '#f97316', lw * 1.5);
-      poly([17,18,19,20,21], '#eab308', lw);
-      poly([22,23,24,25,26], '#eab308', lw);
-      poly([27,28,29,30], '#a855f7', lw);
-      poly([31,32,33,34,35], '#a855f7', lw);
-      poly([36,37,38,39,40,41,36], '#3b82f6', lw);
-      poly([42,43,44,45,46,47,42], '#3b82f6', lw);
-      poly([48,49,50,51,52,53,54,55,56,57,58,59,48], '#ef4444', lw * 1.3);
-      poly([60,61,62,63,64,65,66,67,60], '#ef4444', lw * 0.8);
-      positions.forEach((p, i) => {
-        if (i % 8 !== 0) return;
-        tctx.beginPath(); tctx.arc(lx(p.x), ly(p.y), dr, 0, 2*Math.PI);
-        tctx.fillStyle = '#3b82f6'; tctx.fill();
-      });
-    }
-  } else {
+  // Generate face dengan bbox + landmark (pakai fungsi proven)
+  let faceImg;
+  try {
+    const faceBuf = await drawFaceLandmarks(imagePath);
+    faceImg = await loadImage(faceBuf);
+  } catch (e) {
+    // Fallback: crop biasa
+    const img = await loadOrientedImage(imagePath);
+    const tmp = createCanvas(faceSz, faceSz);
+    const tctx = tmp.getContext('2d');
     tctx.drawImage(img, 0, 0, img.width, img.height, 0, 0, faceSz, faceSz);
+    faceImg = await loadImage(tmp.toBuffer('image/jpeg', { quality: 0.9 }));
   }
-  const faceBuf = tmp.toBuffer('image/jpeg', { quality: 0.9 });
-  const faceImg = await loadImage(faceBuf);
-  ctx.drawImage(faceImg, lx + (leftW - faceSz) / 2, ly + 34, faceSz, faceSz);
+  // Resize ke faceSz x faceSz & gambar
+  const fw = faceImg.width, fh = faceImg.height;
+  const ratio = Math.min(faceSz / fw, faceSz / fh);
+  const dw = Math.round(fw * ratio), dh = Math.round(fh * ratio);
+  ctx.drawImage(faceImg, lx + (leftW - dw) / 2, ly + 28, dw, dh);
 
-  // Label bawah foto
   ctx.fillStyle = '#444';
   ctx.font = 'bold 10px sans-serif';
-  ctx.fillText('Bounding Box + 68 Landmark', lx + leftW / 2, ly + 34 + faceSz + 12);
-  ctx.font = '9px sans-serif';
-  ctx.fillStyle = '#666';
-  ctx.fillText('(Hasil Deteksi & Alignment)', lx + leftW / 2, ly + 34 + faceSz + 26);
+  ctx.fillText('Bounding Box + 68 Landmark', lx + leftW / 2, ly + 28 + faceSz + 6);
 
   // ── PANAH ──
   const ax = lx + leftW, ay = ly + blockH / 2;
-  drawArrow(ctx, ax + 6, ay, ax + arrowW - 6, ay, '#888', 3);
+  drawArrow(ctx, ax + 4, ay, ax + arrowW - 4, ay, '#888', 3);
 
-  // ── KOLOM KANAN: ENCODING 128-D ──
+  // ── KOLOM KANAN: ENCODING 128-D (hanya sampel) ──
   const rx = lx + leftW + arrowW, ry = ly;
   ctx.fillStyle = '#faf5ff';
   roundRect(ctx, rx, ry, rightW, blockH, 10);
@@ -512,31 +461,50 @@ async function generateEncodingDiagram(imagePath, descriptor) {
 
   ctx.fillStyle = '#6b21a8';
   ctx.font = 'bold 13px sans-serif';
+  ctx.textAlign = 'center';
   ctx.fillText('Face Encoding (128 Dimensi)', rx + rightW / 2, ry + 24);
 
-  // Tampilkan nilai encoding sebagai teks multi-baris
-  ctx.fillStyle = '#333';
-  ctx.font = '11px "Courier New", monospace';
-  ctx.textAlign = 'left';
-  const textX = rx + 14;
-  let textY = ry + 44;
-  const lineH = 15;
-  const maxCols = 8;  // 8 nilai per baris, 16 baris = 128
+  // Nama-nama dimensi contoh
+  ctx.fillStyle = '#555';
+  ctx.font = '10px sans-serif';
+  ctx.fillText('Contoh nilai embedding:', rx + 14, ry + 48);
 
+  // Nilai encoding (hanya 6 contoh)
+  ctx.fillStyle = '#222';
+  ctx.font = 'bold 14px "Courier New", monospace';
+  ctx.textAlign = 'left';
   if (Array.isArray(descriptor) && descriptor.length === 128) {
-    for (let row = 0; row < 16; row++) {
-      const start = row * maxCols;
-      const vals = descriptor.slice(start, start + maxCols)
-        .map(v => (v >= 0 ? ' ' : '') + v.toFixed(5))
-        .join('  ');
-      ctx.fillText(vals, textX, textY);
-      textY += lineH;
-    }
-  } else {
-    ctx.fillStyle = '#999';
-    ctx.font = '12px sans-serif';
-    ctx.fillText('(descriptor tidak tersedia)', textX + 100, textY);
+    const samples = descriptor.slice(0, 6);
+    const text = samples.map(v => (v >= 0 ? ' ' : '') + v.toFixed(5)).join('  ');
+    ctx.fillText(text, rx + 14, ry + 74);
   }
+  ctx.fillStyle = '#888';
+  ctx.font = '11px "Courier New", monospace';
+  ctx.fillText('...', rx + 14, ry + 96);
+  ctx.fillText('(total 128 dimensi)', rx + 14, ry + 114);
+
+  // Heatmap kecil di bawah
+  const cell = 6, gap = 1, cols = 32, rows = 4;
+  const gridW = cols * (cell + gap) - gap;
+  const gridH = rows * (cell + gap) - gap;
+  const gx = rx + (rightW - gridW) / 2;
+  const gy = ry + 148;
+  if (Array.isArray(descriptor) && descriptor.length === 128) {
+    let minV = Infinity, maxV = -Infinity;
+    for (let i = 0; i < 128; i++) { if (descriptor[i] < minV) minV = descriptor[i]; if (descriptor[i] > maxV) maxV = descriptor[i]; }
+    const range = maxV - minV || 1;
+    for (let i = 0; i < 128; i++) {
+      const col = i % cols, row = Math.floor(i / cols);
+      const t = (descriptor[i] - minV) / range;
+      const r = Math.round(59 + t * 160), g = Math.round(130 - t * 80), b = Math.round(246 - t * 140);
+      ctx.fillStyle = `rgb(${r},${g},${b})`;
+      ctx.fillRect(gx + col * (cell + gap), gy + row * (cell + gap), cell, cell);
+    }
+  }
+  ctx.fillStyle = '#aaa';
+  ctx.font = '9px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('Visualisasi 128-d (biru rendah, ungu tinggi)', rx + rightW / 2, gy + gridH + 12);
 
   // Footer
   ctx.fillStyle = '#999';
