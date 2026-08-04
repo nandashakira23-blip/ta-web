@@ -3963,20 +3963,11 @@ async function servePipelineStage(res, photoPath, cacheKeyBase, stage, extra) {
             out = await drawFaceLandmarks(src);
             out = await sharp(out).resize(720, 720, { fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 90 }).toBuffer();
         } else if (stage === 'encode') {
-            const { detectFaces, generateEncodingChart } = require('../utils/face-recognition');
+            // Diagram alur: Citra Wajah → CNN → Face Encoding 128-D
+            const { detectFaces, generateEncodingDiagram } = require('../utils/face-recognition');
             const faces = await detectFaces(src);
-            if (faces && faces.length > 0 && faces[0].descriptor) {
-                out = await generateEncodingChart(faces[0].descriptor);
-            } else {
-                const { createCanvas } = require('canvas');
-                const cv = createCanvas(500, 150);
-                const ctx = cv.getContext('2d');
-                ctx.fillStyle = '#ef4444';
-                ctx.font = '16px sans-serif';
-                ctx.textAlign = 'center';
-                ctx.fillText('Encoding gagal — wajah tidak terdeteksi', 250, 75);
-                out = cv.toBuffer('image/jpeg', { quality: 0.9 });
-            }
+            const descriptor = (faces && faces.length > 0) ? faces[0].descriptor : null;
+            out = await generateEncodingDiagram(src, descriptor);
         } else if (stage === 'match' && extra) {
             // Pencocokan wajah: side-by-side probe vs referensi
             const refPath = [path.join(__dirname, '..', 'public', extra.refPhoto), path.join(__dirname, '..', extra.refPhoto)]
