@@ -204,6 +204,7 @@
 <div id="pipOverlay" class="pip-overlay no-print" onclick="if(event.target===this)closePipeline()">
     <div class="pip-box">
         <button class="pip-close" onclick="closePipeline()">&times;</button>
+        <button class="pip-close no-print" onclick="downloadImage()" title="Download gambar" style="float:right;margin-right:8px;font-size:18px;">⬇</button>
         <div class="pip-title" id="pipTitle">Pipeline Face Recognition</div>
         <div class="pip-tabs">
             <button class="pip-tab sel" data-stage="bbox" onclick="switchStage('bbox')">Bounding Box</button>
@@ -389,6 +390,17 @@
     }
     // Escape key to close
     document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closePipeline(); });
+    // Download gambar pipeline
+    function downloadImage() {
+        var img = document.querySelector('#pipImg img');
+        if (!img) { alert('Gambar belum dimuat. Pilih tab dulu.'); return; }
+        var a = document.createElement('a');
+        a.href = img.src;
+        var stage = document.querySelector('.pip-tab.sel');
+        var name = (stage ? stage.textContent.trim() : 'pipeline').replace(/\s+/g, '_');
+        a.download = 'Face_' + name + '_' + new Date().toISOString().slice(0,10) + '.jpg';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    }
 </script>
 </body>
 </html>
