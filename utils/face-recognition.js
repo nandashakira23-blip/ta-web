@@ -383,7 +383,7 @@ async function drawFaceLandmarks(imagePath) {
 
 /**
  * Diagram alur proses ekstraksi face encoding 128 dimensi.
- * Layout horizontal 3 kolom: Bounding Box → Face Alignment → Encoding 128-D.
+ * Layout 2 kolom: Wajah (bbox + landmark) → Encoding 128-D (nilai teks).
  * Cocok untuk dokumentasi skripsi/tesis.
  * @param {string} imagePath path file gambar
  * @param {number[]} descriptor array 128 dimensi (hasil ekstraksi)
@@ -393,7 +393,6 @@ async function generateEncodingDiagram(imagePath, descriptor) {
   await initialize();
   const img = await loadOrientedImage(imagePath);
 
-  // Deteksi wajah + landmark sekali untuk semua blok
   const detections = await faceapi
     .detectSingleFace(img, new faceapi.SsdMobilenetv1Options({ minConfidence: DETECTION_MIN_CONFIDENCE }))
     .withFaceLandmarks();
@@ -402,160 +401,138 @@ async function generateEncodingDiagram(imagePath, descriptor) {
   const positions = detections && detections.landmarks ? detections.landmarks.positions : null;
 
   // ── Layout ──
-  const colW = 210;       // lebar tiap kolom
-  const faceSz = 150;     // ukuran thumbnail wajah
-  const arrowW = 36;      // lebar area panah antar kolom
-  const padX = 12;
-  const padY = 20;
-  const labelH = 28;      // tinggi label judul
-  const headerH = 26;     // tinggi header "Tahap 1/2/3"
-  const blockPad = 14;    // padding dalam blok
-  const blockW = colW;
-  const blockH = headerH + blockPad + faceSz + blockPad + labelH;
-  const totalW = padX + blockW + arrowW + blockW + arrowW + blockW + padX;
-  const totalH = padY + blockH + padY + 30;
+  const faceSz = 200;
+  const pad = 20;
+  const arrowW = 50;
+  const leftW = pad + faceSz + pad;       // kolom kiri: foto
+  const rightW = 520;                      // kolom kanan: teks encoding
+  const totalW = leftW + arrowW + rightW + pad;
+  const blockH = Math.max(faceSz, 340) + pad * 2;
+  const totalH = blockH + pad + 30;
 
   const cv = createCanvas(totalW, totalH);
   const ctx = cv.getContext('2d');
-
-  // Background putih
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, totalW, totalH);
 
-  // Helper: crop face dari gambar ke buffer
-  function cropFaceToBuf(buf, drawBox, boxColor, drawLandmarks) {
-    const tmp = createCanvas(faceSz, faceSz);
-    const tctx = tmp.getContext('2d');
-    tctx.fillStyle = '#f5f5f5';
-    tctx.fillRect(0, 0, faceSz, faceSz);
+  // ── KOLOM KIRI: FOTO WAJAH + BBOX + LANDMARK ──
+  const lx = pad, ly = pad;
+  ctx.fillStyle = '#eff6ff';
+  roundRect(ctx, lx, ly, leftW, blockH, 10);
+  ctx.fill();
+  ctx.strokeStyle = '#3b82f6';
+  ctx.lineWidth = 2;
+  roundRect(ctx, lx, ly, leftW, blockH, 10);
+  ctx.stroke();
 
-    if (box) {
-      const fcx = box.x + box.width / 2, fcy = box.y + box.height / 2;
-      const side = Math.round(Math.max(box.width, box.height) * 1.35);
-      const sx = Math.max(0, Math.round(fcx - side / 2));
-      const sy = Math.max(0, Math.round(fcy - side / 2));
-      const sw = Math.min(side, img.width - sx);
-      const sh = Math.min(side, img.height - sy);
-      tctx.drawImage(img, sx, sy, sw, sh, 0, 0, faceSz, faceSz);
+  ctx.fillStyle = '#1e40af';
+  ctx.font = 'bold 13px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('Deteksi & Alignment', lx + leftW / 2, ly + 24);
 
-      if (drawBox) {
-        const scale = faceSz / side;
-        const bx = (box.x - sx) * scale, by = (box.y - sy) * scale;
-        const bw = box.width * scale, bh = box.height * scale;
-        tctx.strokeStyle = boxColor || '#22c55e';
-        tctx.lineWidth = Math.max(2, Math.round(faceSz * 0.012));
-        tctx.strokeRect(bx, by, bw, bh);
-      }
+  // Crop face + bbox + landmarks
+  const tmp = createCanvas(faceSz, faceSz);
+  const tctx = tmp.getContext('2d');
+  tctx.fillStyle = '#f5f5f5';
+  tctx.fillRect(0, 0, faceSz, faceSz);
 
-      if (drawLandmarks && positions) {
-        const scale = faceSz / side;
-        const lw = Math.max(0.8, faceSz * 0.002);
-        const dr = Math.max(1.5, faceSz * 0.006);
-        function lx(px) { return (px - sx) * scale; }
-        function ly(py) { return (py - sy) * scale; }
-        function poly(indices, color, w) {
-          tctx.beginPath(); tctx.strokeStyle = color; tctx.lineWidth = w || lw;
-          for (let i = 0; i < indices.length; i++) {
-            const p = positions[indices[i]]; if (!p) continue;
-            if (i === 0) tctx.moveTo(lx(p.x), ly(p.y)); else tctx.lineTo(lx(p.x), ly(p.y));
-          }
-          tctx.stroke();
+  if (box) {
+    const fcx = box.x + box.width / 2, fcy = box.y + box.height / 2;
+    const side = Math.round(Math.max(box.width, box.height) * 1.35);
+    const sx = Math.max(0, Math.round(fcx - side / 2));
+    const sy = Math.max(0, Math.round(fcy - side / 2));
+    const sw = Math.min(side, img.width - sx);
+    const sh = Math.min(side, img.height - sy);
+    tctx.drawImage(img, sx, sy, sw, sh, 0, 0, faceSz, faceSz);
+    const scale = faceSz / side;
+
+    // Bounding box hijau
+    tctx.strokeStyle = '#22c55e';
+    tctx.lineWidth = Math.max(2.5, Math.round(faceSz * 0.015));
+    tctx.strokeRect((box.x - sx) * scale, (box.y - sy) * scale, box.width * scale, box.height * scale);
+
+    // Landmarks
+    if (positions) {
+      const lw = Math.max(0.8, faceSz * 0.002);
+      const dr = Math.max(1.5, faceSz * 0.006);
+      function lx(px) { return (px - sx) * scale; }
+      function ly(py) { return (py - sy) * scale; }
+      function poly(indices, color, w) {
+        tctx.beginPath(); tctx.strokeStyle = color; tctx.lineWidth = w || lw;
+        for (let i = 0; i < indices.length; i++) {
+          const p = positions[indices[i]]; if (!p) continue;
+          if (i === 0) tctx.moveTo(lx(p.x), ly(p.y)); else tctx.lineTo(lx(p.x), ly(p.y));
         }
-        poly([...Array(17).keys()], '#f97316', lw * 1.5);
-        poly([17,18,19,20,21], '#eab308', lw);
-        poly([22,23,24,25,26], '#eab308', lw);
-        poly([27,28,29,30], '#a855f7', lw);
-        poly([31,32,33,34,35], '#a855f7', lw);
-        poly([36,37,38,39,40,41,36], '#3b82f6', lw);
-        poly([42,43,44,45,46,47,42], '#3b82f6', lw);
-        poly([48,49,50,51,52,53,54,55,56,57,58,59,48], '#ef4444', lw * 1.3);
-        poly([60,61,62,63,64,65,66,67,60], '#ef4444', lw * 0.8);
-        positions.forEach((p, i) => {
-          if (i % 8 !== 0) return;
-          tctx.beginPath(); tctx.arc(lx(p.x), ly(p.y), dr, 0, 2*Math.PI);
-          tctx.fillStyle = '#3b82f6'; tctx.fill();
-        });
+        tctx.stroke();
       }
-    } else {
-      tctx.drawImage(img, 0, 0, img.width, img.height, 0, 0, faceSz, faceSz);
+      poly([...Array(17).keys()], '#f97316', lw * 1.5);
+      poly([17,18,19,20,21], '#eab308', lw);
+      poly([22,23,24,25,26], '#eab308', lw);
+      poly([27,28,29,30], '#a855f7', lw);
+      poly([31,32,33,34,35], '#a855f7', lw);
+      poly([36,37,38,39,40,41,36], '#3b82f6', lw);
+      poly([42,43,44,45,46,47,42], '#3b82f6', lw);
+      poly([48,49,50,51,52,53,54,55,56,57,58,59,48], '#ef4444', lw * 1.3);
+      poly([60,61,62,63,64,65,66,67,60], '#ef4444', lw * 0.8);
+      positions.forEach((p, i) => {
+        if (i % 8 !== 0) return;
+        tctx.beginPath(); tctx.arc(lx(p.x), ly(p.y), dr, 0, 2*Math.PI);
+        tctx.fillStyle = '#3b82f6'; tctx.fill();
+      });
     }
-    return tmp.toBuffer('image/jpeg', { quality: 0.9 });
+  } else {
+    tctx.drawImage(img, 0, 0, img.width, img.height, 0, 0, faceSz, faceSz);
   }
+  const faceBuf = tmp.toBuffer('image/jpeg', { quality: 0.9 });
+  const faceImg = await loadImage(faceBuf);
+  ctx.drawImage(faceImg, lx + (leftW - faceSz) / 2, ly + 34, faceSz, faceSz);
 
-  // ── GAMBAR 3 KOLOM ──
-  const stages = [
-    { title: 'Bounding Box',       sub: 'Deteksi Wajah',      color: '#3b82f6', bg: '#eff6ff',
-      draw: () => cropFaceToBuf(img, true, '#22c55e', false) },
-    { title: 'Face Alignment',     sub: '68 Titik Landmark',  color: '#f97316', bg: '#fff7ed',
-      draw: () => cropFaceToBuf(img, true, '#22c55e', true) },
-    { title: 'Encoding 128-D',     sub: 'CNN Embedding Vector',color: '#a855f7', bg: '#faf5ff',
-      draw: null }
-  ];
+  // Label bawah foto
+  ctx.fillStyle = '#666';
+  ctx.font = '10px sans-serif';
+  ctx.fillText('Bounding Box + 68 Landmark', lx + leftW / 2, ly + 34 + faceSz + 12);
+  ctx.fillText('(Deteksi & Alignment)', lx + leftW / 2, ly + 34 + faceSz + 26);
 
-  for (let si = 0; si < 3; si++) {
-    const s = stages[si];
-    const bx = padX + si * (blockW + arrowW);
-    const by = padY;
+  // ── PANAH ──
+  const ax = lx + leftW, ay = ly + blockH / 2;
+  drawArrow(ctx, ax + 6, ay, ax + arrowW - 6, ay, '#888', 3);
 
-    // Header "Tahap 1/2/3"
-    ctx.fillStyle = s.color;
-    ctx.font = 'bold 11px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('Tahap ' + (si + 1), bx + blockW / 2, by + 16);
+  // ── KOLOM KANAN: ENCODING 128-D ──
+  const rx = lx + leftW + arrowW, ry = ly;
+  ctx.fillStyle = '#faf5ff';
+  roundRect(ctx, rx, ry, rightW, blockH, 10);
+  ctx.fill();
+  ctx.strokeStyle = '#a855f7';
+  ctx.lineWidth = 2;
+  roundRect(ctx, rx, ry, rightW, blockH, 10);
+  ctx.stroke();
 
-    // Blok
-    ctx.fillStyle = s.bg;
-    roundRect(ctx, bx, by + headerH, blockW, blockH - headerH, 8);
-    ctx.fill();
-    ctx.strokeStyle = s.color;
-    ctx.lineWidth = 2;
-    roundRect(ctx, bx, by + headerH, blockW, blockH - headerH, 8);
-    ctx.stroke();
+  ctx.fillStyle = '#6b21a8';
+  ctx.font = 'bold 13px sans-serif';
+  ctx.fillText('Face Encoding (128 Dimensi)', rx + rightW / 2, ry + 24);
 
-    // Judul
-    ctx.fillStyle = '#111';
-    ctx.font = 'bold 13px sans-serif';
-    ctx.fillText(s.title, bx + blockW / 2, by + headerH + blockPad + 14);
+  // Tampilkan nilai encoding sebagai teks multi-baris
+  ctx.fillStyle = '#333';
+  ctx.font = '11px "Courier New", monospace';
+  ctx.textAlign = 'left';
+  const textX = rx + 14;
+  let textY = ry + 44;
+  const lineH = 15;
+  const maxCols = 8;  // 8 nilai per baris, 16 baris = 128
 
-    // Konten
-    const contentY = by + headerH + blockPad + 22;
-    if (si < 2) {
-      // Blok 1 & 2: gambar wajah
-      const faceBuf = s.draw();
-      const faceImg = await loadImage(faceBuf);
-      ctx.drawImage(faceImg, bx + (blockW - faceSz) / 2, contentY, faceSz, faceSz);
-    } else {
-      // Blok 3: heatmap encoding 128-d
-      const cell = 10, gap = 1, cols = 32, rows = 4;
-      const gridW = cols * (cell + gap) - gap;
-      const gridH = rows * (cell + gap) - gap;
-      const gx = bx + (blockW - gridW) / 2;
-      const gy = contentY + (faceSz - gridH) / 2;
-      if (Array.isArray(descriptor) && descriptor.length === 128) {
-        let minV = Infinity, maxV = -Infinity;
-        for (let i = 0; i < 128; i++) { if (descriptor[i] < minV) minV = descriptor[i]; if (descriptor[i] > maxV) maxV = descriptor[i]; }
-        const range = maxV - minV || 1;
-        for (let i = 0; i < 128; i++) {
-          const col = i % cols, row = Math.floor(i / cols);
-          const t = (descriptor[i] - minV) / range;
-          const r = Math.round(59 + t * 180), g = Math.round(130 - t * 100), b = Math.round(246 - t * 160);
-          ctx.fillStyle = `rgb(${r},${g},${b})`;
-          ctx.fillRect(gx + col * (cell + gap), gy + row * (cell + gap), cell, cell);
-        }
-      }
+  if (Array.isArray(descriptor) && descriptor.length === 128) {
+    for (let row = 0; row < 16; row++) {
+      const start = row * maxCols;
+      const vals = descriptor.slice(start, start + maxCols)
+        .map(v => (v >= 0 ? ' ' : '') + v.toFixed(5))
+        .join('  ');
+      ctx.fillText(vals, textX, textY);
+      textY += lineH;
     }
-
-    // Sub-label bawah
-    ctx.fillStyle = '#666';
-    ctx.font = '10px sans-serif';
-    ctx.fillText(s.sub, bx + blockW / 2, by + headerH + blockPad + faceSz + blockPad + 10);
-
-    // Panah antar kolom (kecuali setelah kolom terakhir)
-    if (si < 2) {
-      const ax = bx + blockW;
-      const ay = by + blockH / 2;
-      drawArrow(ctx, ax + 4, ay, ax + arrowW - 4, ay, '#888', 2.5);
-    }
+  } else {
+    ctx.fillStyle = '#999';
+    ctx.font = '12px sans-serif';
+    ctx.fillText('(descriptor tidak tersedia)', textX + 100, textY);
   }
 
   // Footer
